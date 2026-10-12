@@ -74,9 +74,10 @@ input, select, textarea {
 /* v1.18.19：顶栏固定在页面顶部（48px），布局整体下让；侧栏自顶栏下缘起铺满剩余高度 */
 .layout { display: flex; min-height: 100vh; padding-top: 48px; }
 
-/* ===== 顶栏（v1.18.19）===== */
-/* 两种主题下都是深色（沿用侧栏深色配色）：左侧品牌名（恒为系统名称），
-   右侧机构切换器 + 主题按钮 + 分隔线 + 用户名 + 修改密码 / 退出（自侧栏底部迁来）。 */
+/* ===== 顶栏（v1.18.19 基础，v1.18.50+ 浅色主题补充）===== */
+/* 基础规则为深色顶栏（data-theme="dark"，默认旧观感）；浅色主题（html[data-theme="light"]，
+   现默认）由下方 light 块覆盖为浅色，与浅色侧栏/内容区统一。
+   左侧品牌名（恒为系统名称），右侧机构切换器 + 主题按钮 + 分隔线 + 用户名 + 修改密码 / 退出（自侧栏底部迁来）。 */
 .topbar {
   position: fixed; top: 0; left: 0; right: 0; z-index: 45;
   height: 48px;
@@ -727,23 +728,47 @@ table.mini td.col-ops { text-align: right; white-space: nowrap; }
   .topbar-user { max-width: 110px; }
 }
 
-/* ===== 浅色主题（html[data-theme="light"]）===== */
-/* v1.18.19：顶栏在两种主题下都是深色（不随 data-theme 变化），故无 .topbar 覆盖；
-   仅侧栏导航与登录页随主题切换。 */
+/* ===== 浅色主题（html[data-theme="light"]，默认主题）===== */
+/* 顶栏 + 侧栏统一浅色，与主内容区（白/浅灰卡片）融为一体，呈现干净的现代 SaaS 观感。
+   仍保留 data-theme="dark" 入口（顶栏/侧栏深色），可由右上角主题按钮切回。 */
+html[data-theme="light"] .topbar {
+  background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
+  color: #475569;
+  /* 用 inset 阴影画底部 1px 分隔线，避免 48px 固定高度被 border 撑高导致布局错位 */
+  box-shadow: inset 0 -1px 0 var(--border), 0 1px 3px rgba(16, 24, 40, .04);
+}
+html[data-theme="light"] .topbar-title { color: #1b2536; }
+html[data-theme="light"] .topbar-user { color: #475569; }
+html[data-theme="light"] .topbar-sep { background: var(--border-strong); }
+html[data-theme="light"] .topbar-btn {
+  background: #fff; border-color: var(--border-strong); color: #475569;
+}
+html[data-theme="light"] .topbar-btn:hover { background: var(--panel-2); color: #1b2536; border-color: #c4d0e0; }
+html[data-theme="light"] .theme-btn {
+  background: #fff; border-color: var(--border-strong); color: #475569;
+}
+html[data-theme="light"] .theme-btn:hover { background: var(--panel-2); color: #1b2536; border-color: #c4d0e0; }
+/* 浅色顶栏上的未读跑马灯：由深底红改浅底红，保证对比与协调 */
+html[data-theme="light"] .unread-marquee {
+  border-color: rgba(220, 38, 38, .28);
+  background: rgba(220, 38, 38, .07);
+  color: #dc2626;
+}
+html[data-theme="light"] .unread-marquee:hover { background: rgba(220, 38, 38, .12); }
 html[data-theme="light"] .sidebar {
-  background: linear-gradient(180deg, #ffffff 0%, #f6f9fd 100%);
-  color: #5c6b82;
+  background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
+  color: #475569;
   border-right: 1px solid var(--border);
 }
-html[data-theme="light"] .nav-group-head { color: #8494ab; }
+html[data-theme="light"] .nav-group-head { color: #94a3b8; letter-spacing: .09em; }
 html[data-theme="light"] .nav-group-head:hover { background: #eef3fb; color: #16233a; }
 html[data-theme="light"] .nav-group-head.open { color: #45566f; }
-html[data-theme="light"] .nav-sub::before { background: #dce4f0; }
-html[data-theme="light"] .nav-item { color: #5c6b82; }
-html[data-theme="light"] .nav-item .ico { opacity: .8; }
+html[data-theme="light"] .nav-sub::before { background: var(--border-strong); }
+html[data-theme="light"] .nav-item { color: #475569; }
+html[data-theme="light"] .nav-item .ico { opacity: .82; }
 html[data-theme="light"] .nav-item:hover { background: #eef3fb; color: #16233a; }
 html[data-theme="light"] .nav-item.active {
-  background: #e7effd; color: var(--primary-d);
+  background: #e7effd; color: var(--primary-d); font-weight: 600;
   box-shadow: inset 3px 0 0 var(--primary);
 }
 html[data-theme="light"] .nav-item.active .ico { color: var(--primary); opacity: 1; }

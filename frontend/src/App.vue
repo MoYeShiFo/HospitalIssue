@@ -203,9 +203,9 @@ const canRate = computed(() => {
   return cb === currentUser.value?.username;
 });
 
-// 主题：dark（默认，深色侧栏）/ light（浅色侧栏）
+// 主题：light（默认，浅色侧栏/顶栏，现代 SaaS 观感）/ dark（深色侧栏/顶栏）
 const THEME_KEY = 'issue_tracker_theme';
-const theme = ref(localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark');
+const theme = ref(localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light');
 function applyTheme(t) {
   theme.value = t;
   localStorage.setItem(THEME_KEY, t);
