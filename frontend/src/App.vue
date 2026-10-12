@@ -573,16 +573,30 @@ watch(sessionExpired, (fired) => {
   <Login v-if="showLogin" :app-name="appName" @loggedIn="onLoggedIn" data-session-expired="v1.18.48-session-expired-redirect" />
 
   <div class="layout" v-else>
-    <!-- 顶栏（v1.18.19；v1.18.20 品牌语义调整）：左侧品牌名——多机构时显示**当前机构名**
-         （与右侧切换器同源，避免「品牌显示默认机构名、切换器显示当前机构」对不上），
-         单机构/登录页显示机构级「系统名称」。
-         右侧从左到右：机构切换器 + 未读消息提示（v1.18.38）+ 主题按钮 + 用户名 + 修改密码 / 退出。
-         机构切换器自内容区页眉（.app-head，已移除）迁来，showOrgBar 逻辑沿用；
-         v1.18.50 起多标签页（Sheet Tabs）移到内容区顶部（从侧栏右缘起），不再占顶栏。 -->
+    <!-- v1.18.50 框架改版：整体为「左 / 上 / 下」三区（grid-template-areas 见 styles.css 的 .layout）——
+         左：全高侧栏（品牌移到侧栏顶部）；上：48px 顶条 = 蓝底标签条 + 右侧控制区，从侧栏右缘起；
+         下：内容区。
+         右侧控制区从左到右：机构切换器 + 未读消息提示（v1.18.38）+ 主题按钮 + 用户名 + 修改密码 / 退出。
+         机构切换器自内容区页眉（.app-head，已移除）迁来，showOrgBar 逻辑沿用。 -->
     <header class="topbar">
-      <div class="topbar-brand">
-        <span class="logo">信</span>
-        <span class="topbar-title" :title="brandName">{{ brandName }}</span>
+      <!-- v1.18.50：多标签页（Sheet Tabs）—— 点击左侧菜单新增标签，切换标签不重新初始化已打开界面；
+           显示不下时通过左右按钮横向滚动；右键标签弹出 刷新/关闭其他/全部关闭。 -->
+      <div v-if="tabs.length" class="tab-bar" data-tabs-version="v1.18.50-tabs-keepalive">
+        <button v-show="canScrollLeft" class="tab-scroll" title="向左滚动标签" @click="scrollTabs(-1)">‹</button>
+        <div ref="tabScroller" class="tab-scroller" @scroll="updateTabScroll">
+          <div
+            v-for="tab in tabs"
+            :key="tab.view"
+            class="tab"
+            :class="{ active: view === tab.view }"
+            @click="openTab(tab.view)"
+            @contextmenu.prevent="openTabMenu($event, tab)"
+          >
+            <span class="tab-title">{{ tab.title }}</span>
+            <button class="tab-close" title="关闭" @click.stop="closeTab(tab.view)">×</button>
+          </div>
+        </div>
+        <button v-show="canScrollRight" class="tab-scroll" title="向右滚动标签" @click="scrollTabs(1)">›</button>
       </div>
 
       <div class="topbar-right">
@@ -615,9 +629,14 @@ watch(sessionExpired, (fired) => {
       </div>
     </header>
 
-    <!-- 侧栏分组折叠导航（v1.18.19）：组头（图标 + 组名 + chevron）点击展开/收起；
-         子项左对齐（图标 + 名称缩进），当前项高亮 + 左侧主色强调条（inset 3px，零位移）。 -->
+    <!-- 左：全高侧栏（v1.18.50 框架改版）—— 品牌移到侧栏顶部（多机构时显示当前机构名，
+         与右侧切换器同源；单机构显示系统名称）；下方为分组折叠导航：
+         组头（图标 + 组名 + chevron）点击展开/收起，子项左对齐，当前项高亮 + 左侧主色强调条。 -->
     <aside class="sidebar">
+      <div class="side-brand">
+        <span class="logo">信</span>
+        <span class="side-brand-title" :title="brandName">{{ brandName }}</span>
+      </div>
       <nav class="nav">
         <div v-for="g in navGroups" :key="g.key" class="nav-group">
           <button
@@ -653,28 +672,9 @@ watch(sessionExpired, (fired) => {
     </aside>
 
     <main class="content">
-      <!-- v1.18.19：原内容区页眉（.app-head 机构条）已移除 —— 机构切换器迁往顶栏（避免双份）；
-           showOrgBar / canSwitchOrg / switchingOrg 与切机构逻辑（v1.18.11 整页刷新）零改动。 -->
-
-      <!-- v1.18.50：多标签页（Sheet Tabs）—— 从内容区左缘（侧栏右缘）起的标签条；点击左侧菜单新增标签，
-           切换标签不重新初始化已打开界面；显示不下时通过左右按钮横向滚动；右键标签弹出 刷新/关闭其他/全部关闭。 -->
-      <div v-if="tabs.length" class="tab-bar" data-tabs-version="v1.18.50-tabs-keepalive">
-        <button v-show="canScrollLeft" class="tab-scroll" title="向左滚动标签" @click="scrollTabs(-1)">‹</button>
-        <div ref="tabScroller" class="tab-scroller" @scroll="updateTabScroll">
-          <div
-            v-for="tab in tabs"
-            :key="tab.view"
-            class="tab"
-            :class="{ active: view === tab.view }"
-            @click="openTab(tab.view)"
-            @contextmenu.prevent="openTabMenu($event, tab)"
-          >
-            <span class="tab-title">{{ tab.title }}</span>
-            <button class="tab-close" title="关闭" @click.stop="closeTab(tab.view)">×</button>
-          </div>
-        </div>
-        <button v-show="canScrollRight" class="tab-scroll" title="向右滚动标签" @click="scrollTabs(1)">›</button>
-      </div>
+      <!-- v1.18.19：原内容区页眉（.app-head 机构条）已移除 —— 机构切换器迁往顶条（避免双份）；
+           showOrgBar / canSwitchOrg / switchingOrg 与切机构逻辑（v1.18.11 整页刷新）零改动。
+           v1.18.50：标签条已上移到顶条（.topbar 内），内容区只保留各视图 section。 -->
 
       <!-- v1.18.50：标签右键菜单（刷新 / 关闭其他 / 全部关闭） -->
       <teleport to="body">

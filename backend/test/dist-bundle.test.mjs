@@ -215,9 +215,9 @@ try {
   assert(jsText.includes('v1.18.50-tabs-keepalive'), 'JS 产物含多标签页 build marker（v1.18.50）');
   assert(cssText.includes('.tab-bar'), 'CSS 产物含多标签页样式 .tab-bar（v1.18.50）');
   assert(cssText.includes('.tab.active'), 'CSS 产物含当前标签高亮样式 .tab.active（v1.18.50）');
-  // v1.18.50（风格统一）：浅色主题（顶栏+侧栏浅色、默认主题）必须编进产物，避免「黑底白区」割裂
-  assert(cssText.includes('data-theme=light] .topbar'), 'CSS 产物含浅色主题顶栏规则（v1.18.50 风格统一·浅色 SaaS）');
+  // v1.18.50（风格统一 + 框架改版）：浅色侧栏与「左/上/下」框架（品牌入侧栏 .side-brand）必须编进产物
   assert(cssText.includes('data-theme=light] .sidebar'), 'CSS 产物含浅色主题侧栏规则（v1.18.50 风格统一）');
+  assert(cssText.includes('side-brand'), 'CSS 产物含侧栏顶部品牌 .side-brand（v1.18.50 左/上/下框架改版）');
   // v1.18.50（标签条移到内容区 + 蓝底样式）：标签条铺满内容区宽度，含滚动容器与右键菜单
   assert(cssText.includes('.tab-scroller'), 'CSS 产物含标签滚动容器 .tab-scroller（v1.18.50 Sheet Tabs 内容区标签条）');
   assert(cssText.includes('.tab-scroll'), 'CSS 产物含标签条左右滚动按钮 .tab-scroll（v1.18.50）');
