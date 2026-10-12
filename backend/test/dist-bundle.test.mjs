@@ -215,6 +215,9 @@ try {
   assert(jsText.includes('v1.18.50-tabs-keepalive'), 'JS 产物含多标签页 build marker（v1.18.50）');
   assert(cssText.includes('.tab-bar'), 'CSS 产物含多标签页样式 .tab-bar（v1.18.50）');
   assert(cssText.includes('.tab.active'), 'CSS 产物含当前标签高亮样式 .tab.active（v1.18.50）');
+  // v1.18.50（风格统一）：浅色主题（顶栏+侧栏浅色、默认主题）必须编进产物，避免「黑底白区」割裂
+  assert(cssText.includes('data-theme=light] .topbar'), 'CSS 产物含浅色主题顶栏规则（v1.18.50 风格统一·浅色 SaaS）');
+  assert(cssText.includes('data-theme=light] .sidebar'), 'CSS 产物含浅色主题侧栏规则（v1.18.50 风格统一）');
   // v1.18.41：用户管理「在线」列必须真的编进产物（API 封装 + 在线/离线文案）
   assert(jsText.includes('userPresence'), 'JS 产物含在线状态 API 封装 userPresence（v1.18.41）');
   assert(jsText.includes('在线') && jsText.includes('离线'), 'JS 产物含在线/离线列文案（v1.18.41）');
