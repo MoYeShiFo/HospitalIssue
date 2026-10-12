@@ -264,58 +264,89 @@ input, select, textarea {
   overflow-y: auto;
 }
 
-/* v1.18.50：多标签页（Sheet Tabs）。标签条嵌入顶栏中部，与品牌/右侧控制区一体；
-   自身收成浅灰胶囊容器，内部标签为扁平 pill，当前标签主色下划线高亮。 */
+/* v1.18.50：多标签页（Sheet Tabs）。蓝底标签条，位于内容区顶部、从侧栏右缘起铺满内容区宽度；
+   激活标签为白底浮起（圆角上缘 + 投影），其余标签半透明白字、hover 提亮；关闭按钮仅激活/hover 时显现；
+   显示不下时左右圆形按钮横向滚动；右键标签弹出 刷新 / 关闭其他 / 全部关闭。 */
 .tab-bar {
-  flex: 0 1 auto; min-width: 0;
-  display: flex; align-items: center; gap: 2px;
-  padding: 3px 5px;
-  background: rgba(16, 24, 40, .05);
-  border-radius: 999px;
-  overflow-x: auto;
+  display: flex; align-items: stretch; gap: 2px;
+  margin: -26px -30px 0;                 /* 抵消 .content 的 26px 上 / 30px 左右内边距，铺满内容区宽度 */
+  padding: 5px 10px 0;
+  background: linear-gradient(180deg, #3b74f6 0%, var(--primary) 100%);
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, .14);
+  flex-shrink: 0;
 }
-.tab-bar::-webkit-scrollbar { display: none; }
+.tab-scroller {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: stretch; gap: 2px;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+}
+.tab-scroller::-webkit-scrollbar { display: none; }
 .tab {
+  position: relative;
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 4px 10px;
-  border-radius: 6px;
+  padding: 7px 12px 8px;
+  border: none;
+  border-radius: 7px 7px 0 0;
   cursor: pointer;
   white-space: nowrap;
   font-size: 13px;
-  color: inherit;
+  color: rgba(255, 255, 255, .78);
   background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  transition: color .15s, background .15s, border-color .15s;
+  transition: color .15s, background .15s;
 }
-.tab:hover { background: rgba(37, 99, 235, .1); }
+.tab:hover { color: #fff; background: rgba(255, 255, 255, .12); }
 .tab.active {
-  color: var(--primary);
+  color: var(--text);
   font-weight: 600;
-  background: rgba(37, 99, 235, .08);
-  border-bottom-color: var(--primary);
+  background: var(--panel);
+  box-shadow: 0 -2px 6px rgba(0, 0, 0, .18);
 }
 .tab-title { pointer-events: none; }
 .tab-close {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 14px; height: 14px; padding: 0;
-  border-radius: 50%; border: none;
+  width: 15px; height: 15px; padding: 0;
+  border: none; border-radius: 50%;
   background: transparent; color: currentColor;
-  cursor: pointer; font-size: 12px; line-height: 1;
-  opacity: .55;
+  cursor: pointer; font-size: 13px; line-height: 1;
+  opacity: 0;
   transition: background .12s, color .12s, opacity .12s;
 }
-.tab:hover .tab-close,
-.tab.active .tab-close { opacity: .9; }
+.tab.active .tab-close,
+.tab:hover .tab-close { opacity: .65; }
 .tab-close:hover {
-  background: rgba(220, 38, 38, .1);
+  background: rgba(220, 38, 38, .12);
   color: var(--danger);
   opacity: 1;
 }
-/* 深色顶栏下的标签条微调：容器/标签 hover/active 底色在深色背景上需要更明显 */
-html[data-theme="dark"] .tab-bar { background: rgba(255, 255, 255, .08); }
-html[data-theme="dark"] .tab:hover { background: rgba(255, 255, 255, .1); }
-html[data-theme="dark"] .tab.active { background: rgba(37, 99, 235, .18); }
+/* 标签条左右滚动按钮（蓝底上的圆形按钮） */
+.tab-scroll {
+  flex-shrink: 0; align-self: center;
+  width: 24px; height: 24px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(255, 255, 255, .3); border-radius: 50%;
+  background: rgba(255, 255, 255, .12); color: #fff;
+  cursor: pointer; font-size: 14px; line-height: 1;
+}
+.tab-scroll:hover { background: rgba(255, 255, 255, .24); }
+/* 标签右键菜单（刷新 / 关闭其他 / 全部关闭） */
+.tab-menu-mask { position: fixed; inset: 0; z-index: 300; }
+.tab-menu {
+  position: fixed; z-index: 301;
+  min-width: 104px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(16, 24, 40, .18);
+  padding: 4px;
+}
+.tab-menu-item {
+  display: block; width: 100%; text-align: left;
+  padding: 7px 12px; border: none; border-radius: 6px;
+  background: transparent; color: var(--text);
+  font-size: 13px; cursor: pointer;
+}
+.tab-menu-item:hover { background: var(--panel-2); }
 
 /* 全局页脚（v1.18.34）：版权信息 + 版本号，位于每个界面内容区底部、常驻可见。
    仅覆盖内容区宽度（不压左侧深色侧栏）；sticky 贴底，内容滚动时始终停在视图底部。 */

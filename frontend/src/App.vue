@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch, watchEffect } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch, watchEffect, nextTick } from 'vue';
 import { api, getToken, setToken, clearToken, STATUSES, DEFAULT_PERMISSIONS, MENU_ORDER, BUILTIN_ROLES, DENY_ALL } from './api.js';
 import FilterBar from './components/FilterBar.vue';
 import ProblemList from './components/ProblemList.vue';
@@ -192,6 +192,63 @@ function closeTab(v) {
     const next = tabs.value[idx] || tabs.value[idx - 1];
     view.value = next ? next.view : firstMenu();
   }
+}
+
+// v1.18.50：标签条横向滚动 —— 显示不下时提供左右移动按钮
+const tabScroller = ref(null);
+const canScrollLeft = ref(false);
+const canScrollRight = ref(false);
+function updateTabScroll() {
+  const el = tabScroller.value;
+  if (!el) return;
+  canScrollLeft.value = el.scrollLeft > 1;
+  canScrollRight.value = el.scrollLeft < el.scrollWidth - el.clientWidth - 1;
+}
+function scrollTabs(dir) {
+  const el = tabScroller.value;
+  if (!el) return;
+  el.scrollBy({ left: dir * 200, behavior: 'smooth' });
+}
+// 当前标签变化时滚入可视区（只滚标签容器，不带动页面/内容区滚动），并刷新左右按钮显隐
+function ensureActiveTabVisible() {
+  const el = tabScroller.value;
+  if (!el) return;
+  const active = el.querySelector('.tab.active');
+  if (active) {
+    const elLeft = el.scrollLeft;
+    const elRight = elLeft + el.clientWidth;
+    const aLeft = active.offsetLeft;
+    const aRight = aLeft + active.offsetWidth;
+    if (aLeft < elLeft) el.scrollTo({ left: aLeft - 8, behavior: 'smooth' });
+    else if (aRight > elRight) el.scrollTo({ left: aRight - el.clientWidth + 8, behavior: 'smooth' });
+  }
+  updateTabScroll();
+}
+watch([tabs, view], () => { nextTick(ensureActiveTabVisible); });
+
+// v1.18.50：标签右键菜单（刷新 / 关闭其他 / 全部关闭）
+const tabMenu = ref({ show: false, x: 0, y: 0, view: null });
+function openTabMenu(e, tab) {
+  // 简单防溢出：贴右/贴边时把菜单往内收
+  const mx = Math.min(e.clientX, window.innerWidth - 130);
+  const my = Math.min(e.clientY, window.innerHeight - 130);
+  tabMenu.value = { show: true, x: Math.max(8, mx), y: Math.max(8, my), view: tab.view };
+}
+function closeTabMenu() { tabMenu.value.show = false; }
+function refreshTab() {
+  closeTabMenu();
+  if (currentUser.value) loadForView(view.value);
+}
+function closeOtherTabs() {
+  const keep = tabMenu.value.view;
+  closeTabMenu();
+  tabs.value = tabs.value.filter((t) => t.view === keep);
+  view.value = keep;
+}
+function closeAllTabs() {
+  closeTabMenu();
+  tabs.value = [];
+  view.value = firstMenu();
 }
 
 // 回访打分权限：需「问题回访」功能权限，且为「具备回访全部权限 / 登记人本人 / 老数据（无 createdBy）」
@@ -485,7 +542,15 @@ watch(myPerms, () => {
   if (currentUser.value && !canView(view.value)) openTab(firstMenu());
 });
 
-onMounted(boot);
+onMounted(() => {
+  boot();
+  // v1.18.50：窗口尺寸变化时刷新标签条左右滚动按钮显隐
+  window.addEventListener('resize', updateTabScroll);
+  nextTick(updateTabScroll);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateTabScroll);
+});
 
 // v1.18.48：登录失效（api.js 收到「带 token 的 401」）后自动退到登录界面。
 // 监听到信号即停止全部轮询并清空登录态；不清除 VIEW_KEY，重登录后回到原菜单。
@@ -511,28 +576,13 @@ watch(sessionExpired, (fired) => {
     <!-- 顶栏（v1.18.19；v1.18.20 品牌语义调整）：左侧品牌名——多机构时显示**当前机构名**
          （与右侧切换器同源，避免「品牌显示默认机构名、切换器显示当前机构」对不上），
          单机构/登录页显示机构级「系统名称」。
-         右侧从左到右：机构切换器 + 主题按钮 + 分隔线 + 用户名 + 修改密码 / 退出。
+         右侧从左到右：机构切换器 + 未读消息提示（v1.18.38）+ 主题按钮 + 用户名 + 修改密码 / 退出。
          机构切换器自内容区页眉（.app-head，已移除）迁来，showOrgBar 逻辑沿用；
-         顶栏在两种主题下都是深色（沿用侧栏深色配色），OrgSwitcher 的两态配色已按深色宿主调整。 -->
+         v1.18.50 起多标签页（Sheet Tabs）移到内容区顶部（从侧栏右缘起），不再占顶栏。 -->
     <header class="topbar">
       <div class="topbar-brand">
         <span class="logo">信</span>
         <span class="topbar-title" :title="brandName">{{ brandName }}</span>
-      </div>
-
-      <!-- v1.18.50：多标签页（Sheet Tabs）—— 点击左侧菜单会新增标签，切换标签不重新初始化已打开界面。
-           标签条融合在顶栏中部，与品牌/右侧控制区一体，不再悬在内容区上方。 -->
-      <div v-if="tabs.length" class="tab-bar" data-tabs-version="v1.18.50-tabs-keepalive">
-        <div
-          v-for="tab in tabs"
-          :key="tab.view"
-          class="tab"
-          :class="{ active: view === tab.view }"
-          @click="openTab(tab.view)"
-        >
-          <span class="tab-title">{{ tab.title }}</span>
-          <button class="tab-close" title="关闭" @click.stop="closeTab(tab.view)">×</button>
-        </div>
       </div>
 
       <div class="topbar-right">
@@ -605,6 +655,38 @@ watch(sessionExpired, (fired) => {
     <main class="content">
       <!-- v1.18.19：原内容区页眉（.app-head 机构条）已移除 —— 机构切换器迁往顶栏（避免双份）；
            showOrgBar / canSwitchOrg / switchingOrg 与切机构逻辑（v1.18.11 整页刷新）零改动。 -->
+
+      <!-- v1.18.50：多标签页（Sheet Tabs）—— 从内容区左缘（侧栏右缘）起的标签条；点击左侧菜单新增标签，
+           切换标签不重新初始化已打开界面；显示不下时通过左右按钮横向滚动；右键标签弹出 刷新/关闭其他/全部关闭。 -->
+      <div v-if="tabs.length" class="tab-bar" data-tabs-version="v1.18.50-tabs-keepalive">
+        <button v-show="canScrollLeft" class="tab-scroll" title="向左滚动标签" @click="scrollTabs(-1)">‹</button>
+        <div ref="tabScroller" class="tab-scroller" @scroll="updateTabScroll">
+          <div
+            v-for="tab in tabs"
+            :key="tab.view"
+            class="tab"
+            :class="{ active: view === tab.view }"
+            @click="openTab(tab.view)"
+            @contextmenu.prevent="openTabMenu($event, tab)"
+          >
+            <span class="tab-title">{{ tab.title }}</span>
+            <button class="tab-close" title="关闭" @click.stop="closeTab(tab.view)">×</button>
+          </div>
+        </div>
+        <button v-show="canScrollRight" class="tab-scroll" title="向右滚动标签" @click="scrollTabs(1)">›</button>
+      </div>
+
+      <!-- v1.18.50：标签右键菜单（刷新 / 关闭其他 / 全部关闭） -->
+      <teleport to="body">
+        <div v-if="tabMenu.show">
+          <div class="tab-menu-mask" @click="closeTabMenu" @contextmenu.prevent="closeTabMenu"></div>
+          <div class="tab-menu" :style="{ left: tabMenu.x + 'px', top: tabMenu.y + 'px' }" @click.stop>
+            <button class="tab-menu-item" @click="refreshTab">刷新</button>
+            <button class="tab-menu-item" @click="closeOtherTabs">关闭其他</button>
+            <button class="tab-menu-item" @click="closeAllTabs">全部关闭</button>
+          </div>
+        </div>
+      </teleport>
 
       <section v-show="view === 'issues'">
         <header class="page-head">
