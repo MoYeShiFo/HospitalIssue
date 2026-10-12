@@ -535,11 +535,6 @@ watch(sessionExpired, (fired) => {
         </div>
       </div>
 
-      <!-- v1.18.38：未读消息跑马灯 —— 有未读聊天消息时在顶栏中部滚动提示，点击进入聊天 -->
-      <button v-if="chatUnread > 0" class="unread-marquee" title="点击进入聊天" @click="goChat">
-        <span class="um-ico">📢</span>
-        <span class="um-viewport"><span class="um-track">您有 {{ chatUnread }} 条未读消息，点击进入聊天查看</span></span>
-      </button>
       <div class="topbar-right">
         <OrgSwitcher
           v-if="showOrgBar"
@@ -549,6 +544,11 @@ watch(sessionExpired, (fired) => {
           :can-switch="canSwitchOrg"
           @switch="onSwitchOrg"
         />
+        <!-- v1.18.38：未读消息跑马灯 —— 有未读聊天消息时提示，点击进入聊天；放在右侧控制区，不插入标签条中部 -->
+        <button v-if="chatUnread > 0" class="unread-marquee" title="点击进入聊天" @click="goChat">
+          <span class="um-ico">📢</span>
+          <span class="um-viewport"><span class="um-track">您有 {{ chatUnread }} 条未读消息，点击进入聊天查看</span></span>
+        </button>
         <button class="theme-btn" :title="theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'" @click="toggleTheme">
           <svg v-if="theme === 'dark'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="4" />
