@@ -215,11 +215,13 @@ try {
   assert(jsText.includes('v1.18.50-tabs-keepalive'), 'JS 产物含多标签页 build marker（v1.18.50）');
   assert(cssText.includes('.tab-bar'), 'CSS 产物含多标签页样式 .tab-bar（v1.18.50）');
   assert(cssText.includes('.tab.active'), 'CSS 产物含当前标签高亮样式 .tab.active（v1.18.50）');
-  // v1.18.50（风格统一）：浅色主题（顶栏+侧栏浅色、默认主题）必须编进产物，避免「黑底白区」割裂
-  assert(cssText.includes('data-theme=light] .topbar'), 'CSS 产物含浅色主题顶栏规则（v1.18.50 风格统一·浅色 SaaS）');
+  // v1.18.50（风格统一 + 框架改版）：浅色侧栏与「左/上/下」框架（品牌入侧栏 .side-brand）必须编进产物
   assert(cssText.includes('data-theme=light] .sidebar'), 'CSS 产物含浅色主题侧栏规则（v1.18.50 风格统一）');
-  // v1.18.50（融合顶栏）：标签条从内容区移到顶栏中部，CSS 中 flex:0 1 auto 自然左对齐，并收成胶囊容器
-  assert(cssText.includes('.tab-bar{flex:0 1 auto'), 'CSS 产物含标签条融合顶栏规则 flex:0 1 auto（v1.18.50 Sheet Tabs 嵌入顶栏）');
+  assert(cssText.includes('side-brand'), 'CSS 产物含侧栏顶部品牌 .side-brand（v1.18.50 左/上/下框架改版）');
+  // v1.18.50（标签条移到内容区 + 蓝底样式）：标签条铺满内容区宽度，含滚动容器与右键菜单
+  assert(cssText.includes('.tab-scroller'), 'CSS 产物含标签滚动容器 .tab-scroller（v1.18.50 Sheet Tabs 内容区标签条）');
+  assert(cssText.includes('.tab-scroll'), 'CSS 产物含标签条左右滚动按钮 .tab-scroll（v1.18.50）');
+  assert(cssText.includes('.tab-menu'), 'CSS 产物含标签右键菜单 .tab-menu（v1.18.50 刷新/关闭其他/全部关闭）');
   // v1.18.41：用户管理「在线」列必须真的编进产物（API 封装 + 在线/离线文案）
   assert(jsText.includes('userPresence'), 'JS 产物含在线状态 API 封装 userPresence（v1.18.41）');
   assert(jsText.includes('在线') && jsText.includes('离线'), 'JS 产物含在线/离线列文案（v1.18.41）');
