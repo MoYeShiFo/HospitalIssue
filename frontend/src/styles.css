@@ -74,10 +74,10 @@ input, select, textarea {
 /* v1.18.19：顶栏固定在页面顶部（48px），布局整体下让；侧栏自顶栏下缘起铺满剩余高度 */
 .layout { display: flex; min-height: 100vh; padding-top: 48px; }
 
-/* ===== 顶栏（v1.18.19 基础，v1.18.50+ 浅色主题补充）===== */
-/* 基础规则为深色顶栏（data-theme="dark"，默认旧观感）；浅色主题（html[data-theme="light"]，
-   现默认）由下方 light 块覆盖为浅色，与浅色侧栏/内容区统一。
-   左侧品牌名（恒为系统名称），右侧机构切换器 + 主题按钮 + 分隔线 + 用户名 + 修改密码 / 退出（自侧栏底部迁来）。 */
+/* ===== 顶栏（v1.18.19 基础，v1.18.50+ 标签条融合 + 浅色主题补充）===== */
+/* 基础规则为深色顶栏（data-theme="dark"）；浅色主题（html[data-theme="light"]，现默认）由下方
+   light 块覆盖为浅色，与浅色侧栏/内容区统一。v1.18.50 起多标签页（Sheet Tabs）融合在顶栏中部。
+   左侧品牌名，中部标签条，右侧机构切换器 + 主题按钮 + 用户名 + 修改密码 / 退出。 */
 .topbar {
   position: fixed; top: 0; left: 0; right: 0; z-index: 45;
   height: 48px;
@@ -263,39 +263,35 @@ input, select, textarea {
   overflow-y: auto;
 }
 
-/* v1.18.50：多标签页（Sheet Tabs）。标签条吸顶在内容区顶部；
-   风格与主界面统一：扁平、克制，用主色下划线指示当前标签，避免浏览器式白底圆角卡片的突兀感。 */
+/* v1.18.50：多标签页（Sheet Tabs）。标签条融合在顶栏中部，与品牌/右侧控制区一体；
+   扁平 pill 风格，当前标签用主色下划线指示，hover 微高亮。 */
 .tab-bar {
-  position: sticky; top: 0; z-index: 10;
-  display: flex; align-items: flex-end; gap: 2px;
-  padding: 6px 0 0;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg);
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; gap: 3px;
+  padding: 0 6px;
+  background: transparent;
+  border-bottom: none;
   overflow-x: auto;
-  flex-shrink: 0;
 }
-.tab-bar::-webkit-scrollbar { height: 5px; }
-.tab-bar::-webkit-scrollbar-thumb { background: #c4d0e0; border-radius: 3px; }
+.tab-bar::-webkit-scrollbar { display: none; }
 .tab {
-  position: relative;
-  display: inline-flex; align-items: center; gap: 7px;
-  padding: 6px 11px 8px;
-  margin-bottom: -1px;
-  border-radius: 7px 7px 0 0;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px;
+  border-radius: 6px;
   cursor: pointer;
   white-space: nowrap;
   font-size: 13px;
-  color: var(--muted);
+  color: inherit;
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
   transition: color .15s, background .15s, border-color .15s;
 }
-.tab:hover { color: var(--text); background: rgba(37, 99, 235, .05); }
+.tab:hover { background: rgba(37, 99, 235, .08); }
 .tab.active {
   color: var(--primary);
   font-weight: 600;
-  background: rgba(37, 99, 235, .04);
+  background: rgba(37, 99, 235, .08);
   border-bottom-color: var(--primary);
 }
 .tab-title { pointer-events: none; }
@@ -315,6 +311,9 @@ input, select, textarea {
   color: var(--danger);
   opacity: 1;
 }
+/* 深色顶栏下的标签条微调：hover/active 底色在深色背景上需要更明显 */
+html[data-theme="dark"] .tab:hover { background: rgba(255, 255, 255, .08); }
+html[data-theme="dark"] .tab.active { background: rgba(37, 99, 235, .18); }
 
 /* 全局页脚（v1.18.34）：版权信息 + 版本号，位于每个界面内容区底部、常驻可见。
    仅覆盖内容区宽度（不压左侧深色侧栏）；sticky 贴底，内容滚动时始终停在视图底部。 */

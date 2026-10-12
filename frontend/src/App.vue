@@ -519,6 +519,22 @@ watch(sessionExpired, (fired) => {
         <span class="logo">信</span>
         <span class="topbar-title" :title="brandName">{{ brandName }}</span>
       </div>
+
+      <!-- v1.18.50：多标签页（Sheet Tabs）—— 点击左侧菜单会新增标签，切换标签不重新初始化已打开界面。
+           标签条融合在顶栏中部，与品牌/右侧控制区一体，不再悬在内容区上方。 -->
+      <div v-if="tabs.length" class="tab-bar" data-tabs-version="v1.18.50-tabs-keepalive">
+        <div
+          v-for="tab in tabs"
+          :key="tab.view"
+          class="tab"
+          :class="{ active: view === tab.view }"
+          @click="openTab(tab.view)"
+        >
+          <span class="tab-title">{{ tab.title }}</span>
+          <button class="tab-close" title="关闭" @click.stop="closeTab(tab.view)">×</button>
+        </div>
+      </div>
+
       <!-- v1.18.38：未读消息跑马灯 —— 有未读聊天消息时在顶栏中部滚动提示，点击进入聊天 -->
       <button v-if="chatUnread > 0" class="unread-marquee" title="点击进入聊天" @click="goChat">
         <span class="um-ico">📢</span>
@@ -589,20 +605,6 @@ watch(sessionExpired, (fired) => {
     <main class="content">
       <!-- v1.18.19：原内容区页眉（.app-head 机构条）已移除 —— 机构切换器迁往顶栏（避免双份）；
            showOrgBar / canSwitchOrg / switchingOrg 与切机构逻辑（v1.18.11 整页刷新）零改动。 -->
-
-      <!-- v1.18.50：多标签页（Sheet Tabs）—— 点击左侧菜单会新增标签，切换标签不重新初始化已打开界面 -->
-      <div v-if="tabs.length" class="tab-bar" data-tabs-version="v1.18.50-tabs-keepalive">
-        <div
-          v-for="tab in tabs"
-          :key="tab.view"
-          class="tab"
-          :class="{ active: view === tab.view }"
-          @click="openTab(tab.view)"
-        >
-          <span class="tab-title">{{ tab.title }}</span>
-          <button class="tab-close" title="关闭" @click.stop="closeTab(tab.view)">×</button>
-        </div>
-      </div>
 
       <section v-show="view === 'issues'">
         <header class="page-head">

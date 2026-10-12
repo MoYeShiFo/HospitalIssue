@@ -218,6 +218,8 @@ try {
   // v1.18.50（风格统一）：浅色主题（顶栏+侧栏浅色、默认主题）必须编进产物，避免「黑底白区」割裂
   assert(cssText.includes('data-theme=light] .topbar'), 'CSS 产物含浅色主题顶栏规则（v1.18.50 风格统一·浅色 SaaS）');
   assert(cssText.includes('data-theme=light] .sidebar'), 'CSS 产物含浅色主题侧栏规则（v1.18.50 风格统一）');
+  // v1.18.50（融合顶栏）：标签条从内容区移到顶栏中部，CSS 用 flex:1 1 auto 占满剩余空间
+  assert(cssText.includes('.tab-bar{flex:1 1 auto'), 'CSS 产物含标签条融合顶栏规则 flex:1 1 auto（v1.18.50 Sheet Tabs 嵌入顶栏）');
   // v1.18.41：用户管理「在线」列必须真的编进产物（API 封装 + 在线/离线文案）
   assert(jsText.includes('userPresence'), 'JS 产物含在线状态 API 封装 userPresence（v1.18.41）');
   assert(jsText.includes('在线') && jsText.includes('离线'), 'JS 产物含在线/离线列文案（v1.18.41）');
