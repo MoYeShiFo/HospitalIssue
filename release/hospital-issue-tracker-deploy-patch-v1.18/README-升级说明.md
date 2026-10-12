@@ -69,7 +69,10 @@
 | v1.18.47 | 功能增强 + 生产热修：**问题登记多选筛选「勾选即生效」**（纯前端：checkbox 勾选/取消后 350ms 防抖自动提交、清除立即生效，按钮文案与列表恒一致）；**并修复 v1.18.45 引入的生产 mssql 回归**——多值筛选在生产（SQL Server）报 `ReferenceError: clauses is not defined` 致列表 500（dev 测试未暴露）。后端 `db/mssqlRepo.js` 将 `multiClause` 移入 `buildWhere` 闭包 | **是（前后端：`db/mssqlRepo.js` 修复 + `components/FilterBar.vue` + `src/version.js` + `frontend/dist`）**，覆盖后**必须重启后端** | 否（无新表新列） | 无（不勾选=全部，行为与升级前一致；旧前端+新后端完全兼容） |
 | v1.18.48 | 功能增强：**登录失效/过期后自动退到登录界面**——会话期内后端返回「带 token 的 401」（token 过期或被服务端拒绝）时，前端 `api.js` 统一捕获并清空本地 token、置位 `sessionExpired` 信号，`App.vue` 监听到即停止全部轮询、清空登录态并退回登录页（不清除 VIEW_KEY，重登录后回到原菜单）；彻底解决此前「401 只清 token 不跳转、界面假死反复报错」的体验问题 | **否（纯前端：`src/api.js` + `src/authState.js` 新增 + `src/App.vue` + `src/version.js` + `frontend/dist`；后端 `backend/src` 零改动），覆盖 `frontend/dist` 后按 `Ctrl+F5` 即可，无需重启后端** | 否（无新表新列） | 无（旧 token 失效后本就该重登，行为符合预期） |
 
-> **本包当前累计版本为 v1.18.48。**
+| v1.18.49 | 功能增强：**工时登记个人化配置 + 在建项目检索 + 随机填充增强**（由同事 MoYeShiFo 经 fork PR#6 合入 main）——工时「个人化配置」交互大幅增强（Timesheet/TimesheetSettings 界面），在建项目检索内核重构（`routes/timesheet.js`、`timesheet/pmisMcp.js`），随机填充便于演示与测试（`timesheet/userConfig.js`/`wxpClient.js`）；新增后端配置文件 `Configs/timesheet.json` | **是（前后端：`auth/usersMssql.js`、`routes/timesheet.js`、`timesheet/pmisMcp.js`/`userConfig.js`/`wxpClient.js` + `Configs/timesheet.json` 新增 + `frontend/dist`）**，覆盖后**必须重启后端** | 否（无新表新列） | 无 |
+| v1.18.50 | 功能增强：**多标签页（Sheet Tabs），切换标签不初始化已打开界面**——左侧每点开一个菜单新增一个标签页，可来回切换、可关闭；切换时**不重新初始化**已打开界面（筛选/分页/滚动位置全部保留）。主视图容器由 `v-if` 改 `v-show` 保持组件存活，各 section 独立滚动、标签栏 sticky 常驻 | **否（纯前端：`src/App.vue` + `src/styles.css` + `src/version.js` + `frontend/dist`；后端零改动），覆盖 `frontend/dist` 后按 `Ctrl+F5` 即可，无需重启后端** | 否（无新表新列） | 无 |
+
+> **本包当前累计版本为 v1.18.50。**
 > 单机构部署的界面差异：①（v1.18.9）顶栏右侧多一枚「当前机构 + 机构名」的半透明白只读标签（v1.18.19 起位于**顶栏**而非内容区页眉）；②（v1.18.10）平台管理员的机构内角色恒为「管理员」，用户管理/成员管理里显示为「管理员 · 固定」的说明文字；③（v1.18.12）用户列表多一列「类型」（院方=灰字 / 公司=蓝色 chip）与一个本地筛选标签页（v1.18.15 起由下拉改为二级 sheet 页），新建账号弹框仅平台管理员多一项「用户类型」；④（v1.18.19）**顶栏 + 分组导航改版**：顶栏显示系统名称与用户区（修改密码/退出自侧栏底部迁来），侧栏改三分组折叠导航、子项左对齐。数据、系统名称、菜单项与权限一律不变，存量账号全部自动归为院方用户。上表 v1.18 / v1.18.6 两行中「单机构界面零变化」指的是**那两次改动当时**的情形。
 > ⚠️ **v1.18.12 必须重启后端**（`user_type` 列由启动时自动加列，无需手工改库）。
 > ⚠️ **v1.18.13 必须重启后端**（改了后端路由 `routes/schedules.js`；**无新表新列，无需手工改库**，值班表 `org_id` 列 v1.18 已就位）。
