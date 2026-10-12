@@ -85,14 +85,17 @@ input, select, textarea {
 
 /* ===== 顶条（v1.18.50：原全宽顶栏改为右上的 48px 顶条，蓝底标签栏即其背景）===== */
 /* 内含：标签条（flex:1 占满，从侧栏右缘起）+ 右侧控制区（机构切换器 / 未读提示 / 主题 / 用户 / 退出）。 */
+/* ===== 顶条（v1.18.50：右上 48px 顶条，浅色画布 + 经典标签形态）===== */
+/* 内含：标签条（flex:1 占满，从侧栏右缘起）+ 右侧控制区（机构切换器 / 未读提示 / 主题 / 用户 / 退出）。
+   底色用 var(--bg) 与内容区连成同一画布，白底激活标签自然浮起；不再用整条蓝色（用户反馈太突兀）。 */
 .topbar {
   grid-area: top;
   height: 48px;
-  background: linear-gradient(180deg, #3b74f6 0%, var(--primary) 100%);
-  color: #cbd5e1;
+  background: var(--bg);
+  color: #475569;
   display: flex; align-items: stretch; gap: 10px;
   padding: 0 14px 0 8px;
-  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, .14), 0 1px 3px rgba(16, 24, 40, .12);
+  box-shadow: inset 0 -1px 0 var(--border);
 }
 .topbar-right { display: flex; align-items: center; gap: 10px; min-width: 0; margin-left: auto; flex-shrink: 0; }
 /* 品牌移到侧栏顶部（v1.18.50 框架改版）：logo + 名称，颜色随侧栏主题（深/浅）切换 */
@@ -108,19 +111,19 @@ input, select, textarea {
   color: #fff; font-size: 14px; font-weight: 600; line-height: 1.3;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.topbar-sep { width: 1px; height: 20px; background: rgba(255, 255, 255, .16); flex-shrink: 0; }
+.topbar-sep { width: 1px; height: 20px; background: var(--border-strong); flex-shrink: 0; }
 /* v1.18.38：顶栏未读消息跑马灯 —— 有未读聊天消息时出现（chatUnread>0），占顶栏中部弹性区，
-   文字横向循环滚动；点击整条进入聊天。深色顶栏上用红色警示底，未读清零后整体消失。
+   文字横向循环滚动；点击整条进入聊天。浅色顶条上用红色警示描边胶囊，未读清零后整体消失。
    v1.18.39 收窄：不再 flex:1 拉满整个中部，改按内容自适应胶囊（上限 420px），紧凑美观。 */
 .unread-marquee {
   flex: 0 1 auto; max-width: 420px; min-width: 0; height: 30px; margin: 0 6px;
   display: flex; align-items: center; gap: 8px; padding: 0 12px;
-  border: 1px solid rgba(248, 113, 113, .38); border-radius: 15px;
-  background: rgba(220, 38, 38, .16);
-  color: #fecaca; font-size: 12.5px; line-height: 1;
+  border: 1px solid rgba(220, 38, 38, .3); border-radius: 15px;
+  background: rgba(220, 38, 38, .07);
+  color: #b91c1c; font-size: 12.5px; line-height: 1;
   cursor: pointer; overflow: hidden;
 }
-.unread-marquee:hover { background: rgba(220, 38, 38, .28); }
+.unread-marquee:hover { background: rgba(220, 38, 38, .13); }
 .um-ico { flex: none; font-size: 14px; line-height: 1; }
 .um-viewport { flex: 1; min-width: 0; overflow: hidden; }
 .um-track {
@@ -129,20 +132,20 @@ input, select, textarea {
 }
 @keyframes um-scroll { to { transform: translateX(-100%); } }
 .topbar-user {
-  color: #e2e8f0; font-size: 13px;
+  color: #334155; font-size: 13px;
   max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .topbar-btn {
-  background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .14);
-  color: #cbd5e1; padding: 5px 11px; font-size: 12px; border-radius: 8px;
+  background: var(--panel); border: 1px solid var(--border-strong);
+  color: #475569; padding: 5px 11px; font-size: 12px; border-radius: 8px;
 }
-.topbar-btn:hover { background: rgba(255, 255, 255, .14); color: #fff; border-color: rgba(255, 255, 255, .22); }
+.topbar-btn:hover { background: rgba(37, 99, 235, .07); color: var(--primary); border-color: rgba(37, 99, 235, .35); }
 .theme-btn {
   width: 26px; height: 26px; padding: 0; flex-shrink: 0; border-radius: 8px;
-  background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .14);
-  color: #cbd5e1;
+  background: var(--panel); border: 1px solid var(--border-strong);
+  color: #475569;
 }
-.theme-btn:hover { background: rgba(255, 255, 255, .17); border-color: rgba(255, 255, 255, .24); color: #fff; }
+.theme-btn:hover { background: rgba(37, 99, 235, .07); border-color: rgba(37, 99, 235, .35); color: var(--primary); }
 .theme-btn svg { width: 15px; height: 15px; display: block; }
 
 .sidebar {
@@ -269,8 +272,9 @@ input, select, textarea {
 }
 
 /* v1.18.50：多标签页（Sheet Tabs）。位于顶条（.topbar）内、从侧栏右缘起占满剩余宽度；
-   蓝底由顶条提供；激活标签白底浮起（圆角上缘 + 投影），其余标签半透明白字、hover 提亮；
-   关闭按钮仅激活/hover 时显现；显示不下时左右圆形按钮横向滚动；右键标签弹出 刷新 / 关闭其他 / 全部关闭。 */
+   顶条与内容区同一浅色画布；激活标签白底浮起（圆角上缘 + 顶部主题色细条 + 轻投影），
+   其余标签灰字、hover 提亮加浅蓝底；关闭按钮仅激活/hover 时显现；
+   显示不下时左右圆形按钮横向滚动；右键标签弹出 刷新 / 关闭其他 / 全部关闭。 */
 .tab-bar {
   flex: 1 1 auto; min-width: 0;
   display: flex; align-items: flex-end; gap: 2px;
@@ -293,16 +297,16 @@ input, select, textarea {
   cursor: pointer;
   white-space: nowrap;
   font-size: 13px;
-  color: rgba(255, 255, 255, .78);
+  color: var(--muted);
   background: transparent;
   transition: color .15s, background .15s;
 }
-.tab:hover { color: #fff; background: rgba(255, 255, 255, .12); }
+.tab:hover { color: var(--text); background: rgba(37, 99, 235, .06); }
 .tab.active {
   color: var(--text);
   font-weight: 600;
   background: var(--panel);
-  box-shadow: 0 -2px 6px rgba(0, 0, 0, .18);
+  box-shadow: inset 0 2px 0 var(--primary), 0 -1px 4px rgba(16, 24, 40, .06);
 }
 .tab-title { pointer-events: none; }
 .tab-close {
@@ -321,16 +325,16 @@ input, select, textarea {
   color: var(--danger);
   opacity: 1;
 }
-/* 标签条左右滚动按钮（蓝底上的圆形按钮） */
+/* 标签条左右滚动按钮（浅色画布上的圆形按钮） */
 .tab-scroll {
   flex-shrink: 0; align-self: center;
   width: 24px; height: 24px; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
-  border: 1px solid rgba(255, 255, 255, .3); border-radius: 50%;
-  background: rgba(255, 255, 255, .12); color: #fff;
+  border: 1px solid var(--border-strong); border-radius: 50%;
+  background: var(--panel); color: var(--muted);
   cursor: pointer; font-size: 14px; line-height: 1;
 }
-.tab-scroll:hover { background: rgba(255, 255, 255, .24); }
+.tab-scroll:hover { background: var(--panel-2); color: var(--text); }
 /* 标签右键菜单（刷新 / 关闭其他 / 全部关闭） */
 .tab-menu-mask { position: fixed; inset: 0; z-index: 300; }
 .tab-menu {
@@ -763,7 +767,7 @@ table.mini td.col-ops { text-align: right; white-space: nowrap; }
 
 /* ===== 浅色主题（html[data-theme="light"]，默认主题）===== */
 /* 侧栏浅色，与主内容区（白/浅灰卡片）融为一体，呈现干净的现代 SaaS 观感。
-   顶条恒为蓝底标签栏（蓝底白字，标签栏视觉不随主题变化）；
+   顶条与内容区同一浅色画布，标签栏白底激活浮起（不随主题变化）；
    仍保留 data-theme="dark" 入口（侧栏深色），可由右上角主题按钮切回。 */
 html[data-theme="light"] .side-brand-title { color: var(--text); }
 html[data-theme="light"] .sidebar {
