@@ -174,6 +174,26 @@ function savedView() {
   return v && canView(v) ? v : firstMenu();
 }
 
+// v1.18.50：多标签页（Sheet Tabs）状态与操作
+const tabs = ref([]); // { view, title }
+function tabTitle(v) { return NAV_ITEMS[v]?.label || v; }
+function openTab(v) {
+  if (!canView(v)) return;
+  if (!tabs.value.find((t) => t.view === v)) {
+    tabs.value.push({ view: v, title: tabTitle(v) });
+  }
+  view.value = v;
+}
+function closeTab(v) {
+  const idx = tabs.value.findIndex((t) => t.view === v);
+  if (idx === -1) return;
+  tabs.value.splice(idx, 1);
+  if (view.value === v) {
+    const next = tabs.value[idx] || tabs.value[idx - 1];
+    view.value = next ? next.view : firstMenu();
+  }
+}
+
 // 回访打分权限：需「问题回访」功能权限，且为「具备回访全部权限 / 登记人本人 / 老数据（无 createdBy）」
 const canRate = computed(() => {
   if (!detail.value || !can('issue.rate')) return false;
@@ -250,7 +270,7 @@ function openCite(row) { citeProblem.value = row; showCite.value = true; }
 // App 层用 canView('issues') 做权限判断（无权限时卡片在 Chat 内已不可点）。
 async function openIssueFromChat(id) {
   if (!canView('issues')) return;
-  view.value = 'issues';
+  openTab('issues');
   const k = groupKeyOf('issues');
   if (k) expandedGroups.value = new Set([...expandedGroups.value, k]);
   try {
@@ -265,7 +285,7 @@ function deleteFromDetail(row) { detail.value = null; onDelete(row); }
 
 // v1.18.38：顶栏未读消息跑马灯点击 → 进入聊天视图（并展开聊天所在侧栏分组，与 openIssueFromChat 同款）
 function goChat() {
-  view.value = 'chat';
+  openTab('chat');
   const k = groupKeyOf('chat');
   if (k) expandedGroups.value = new Set([...expandedGroups.value, k]);
 }
@@ -371,7 +391,7 @@ async function applyBulkDelete() {
 function applyInitialView() {
   const target = savedView();
   const changed = view.value !== target;
-  view.value = target;
+  openTab(target);
   // 侧栏分组（v1.18.19）：默认展开「含当前视图的组」（不做持久化；展开集合整体重置）
   expandedGroups.value = new Set([groupKeyOf(target)].filter(Boolean));
   // 目标与当前一致时 watch 不触发，需手动加载，避免刷新后内容空白
@@ -462,7 +482,7 @@ watch(view, (v) => {
 
 // 权限变更后，若当前视图已不可用，则回到第一个可用菜单
 watch(myPerms, () => {
-  if (currentUser.value && !canView(view.value)) view.value = firstMenu();
+  if (currentUser.value && !canView(view.value)) openTab(firstMenu());
 });
 
 onMounted(boot);
@@ -554,7 +574,7 @@ watch(sessionExpired, (fired) => {
               :key="it.key"
               class="nav-item"
               :class="{ active: view === it.key, 'has-unread': it.badge && it.badge() > 0 }"
-              @click="view = it.key"
+              @click="openTab(it.key)"
             >
               <span class="ico">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" v-html="ICONS[it.icon]"></svg>
@@ -569,6 +589,21 @@ watch(sessionExpired, (fired) => {
     <main class="content">
       <!-- v1.18.19：原内容区页眉（.app-head 机构条）已移除 —— 机构切换器迁往顶栏（避免双份）；
            showOrgBar / canSwitchOrg / switchingOrg 与切机构逻辑（v1.18.11 整页刷新）零改动。 -->
+
+      <!-- v1.18.50：多标签页（Sheet Tabs）—— 点击左侧菜单会新增标签，切换标签不重新初始化已打开界面 -->
+      <div v-if="tabs.length" class="tab-bar" data-tabs-version="v1.18.50-tabs-keepalive">
+        <div
+          v-for="tab in tabs"
+          :key="tab.view"
+          class="tab"
+          :class="{ active: view === tab.view }"
+          @click="openTab(tab.view)"
+        >
+          <span class="tab-title">{{ tab.title }}</span>
+          <button class="tab-close" title="关闭" @click.stop="closeTab(tab.view)">×</button>
+        </div>
+      </div>
+
       <section v-show="view === 'issues'">
         <header class="page-head">
           <div>
@@ -639,26 +674,28 @@ watch(sessionExpired, (fired) => {
       </section>
 
       <NotificationCenter
-        v-if="view === 'notification'"
+        v-show="view === 'notification'"
         :can-send="can('notification.send')"
         :can-broadcast="can('notification.broadcast')"
       />
-      <DutyRoster v-if="view === 'schedule'" :can-manage="can('schedule.manage')" :can-platform-admin="currentUser?.platformAdmin === true" />
-      <Audited v-if="view === 'audited'" :can-audit="can('issue.audit')" @view="openDetail" />
-      <KnowledgeBase v-if="view === 'kb'" />
-      <Timesheet v-if="view === 'timesheet'" @go-config="view = 'tsconfig'" />
-      <TimesheetSettings v-if="view === 'tsconfig'" />
-      <Chat v-if="view === 'chat'" :current-user="currentUser" :can-use="can('chat.use')" :can-view-issues="canView('issues')" @open-issue="openIssueFromChat" />
+      <DutyRoster v-show="view === 'schedule'" :can-manage="can('schedule.manage')" :can-platform-admin="currentUser?.platformAdmin === true" />
+      <Audited v-show="view === 'audited'" :can-audit="can('issue.audit')" @view="openDetail" />
+      <KnowledgeBase v-show="view === 'kb'" />
+      <Timesheet v-show="view === 'timesheet'" @go-config="openTab('tsconfig')" />
+      <TimesheetSettings v-show="view === 'tsconfig'" />
+      <Chat v-show="view === 'chat'" :current-user="currentUser" :can-use="can('chat.use')" :can-view-issues="canView('issues')" @open-issue="openIssueFromChat" />
       <UserManage
-        v-if="view === 'users' && canMenu('users')"
+        v-if="canMenu('users')"
+        v-show="view === 'users'"
         :current-org="currentOrg"
         :can-platform-admin="currentUser?.platformAdmin === true"
         @updated="loadConfig"
       />
-      <AuditLogPanel v-if="view === 'audit' && canMenu('audit')" />
-      <Settings v-if="view === 'settings' && canMenu('settings')" :can-edit="can('settings.edit')" @updated="applyName" />
+      <AuditLogPanel v-if="canMenu('audit')" v-show="view === 'audit'" />
+      <Settings v-if="canMenu('settings')" v-show="view === 'settings'" :can-edit="can('settings.edit')" @updated="applyName" />
       <OrgManage
-        v-if="view === 'orgs' && currentUser?.platformAdmin"
+        v-if="currentUser?.platformAdmin"
+        v-show="view === 'orgs'"
         :current-org-id="currentOrg?.id"
         @changed="refreshOrgs"
       />
@@ -675,7 +712,7 @@ watch(sessionExpired, (fired) => {
     <NotificationBell
       :can-send="can('notification.send')"
       :can-broadcast="can('notification.broadcast')"
-      @open-center="view = 'notification'"
+      @open-center="openTab('notification')"
     />
 
     <ProblemForm
