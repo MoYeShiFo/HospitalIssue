@@ -245,18 +245,66 @@ input, select, textarea {
 .content {
   flex: 1; min-width: 0;
   display: flex; flex-direction: column;
-  /* 固定高度 + 内部滚动：使页脚可 sticky 贴底、在每个界面常驻可见（v1.18.34）。
-     不再整窗滚动，顶栏/侧栏（fixed/sticky）行为不变。 */
+  /* 固定高度：使页脚可 sticky 贴底、在每个界面常驻可见（v1.18.34）。
+     v1.18.50：内容区不再整窗滚动，改由每个 section（标签页）独立滚动，切换标签时保持各自滚动位置。 */
   height: calc(100vh - 48px);
-  overflow-y: auto;
   padding: 26px 30px 0;
 }
 /* v1.18.36：全局修复「所有界面布局缩小」。
    v1.18.34 把 .content 改成 display:flex; flex-direction:column，section 随之变成 flex 子项；
    而 max-width + margin:auto 在列向 flex 里会让子项放弃 stretch、宽度收缩为 fit-content（内容多宽就多宽），
    于是内容不撑满的视图（用户管理/机构管理等）缩成中间一条。显式 width:100% 恢复成
-   block 时代的「撑满内容区、≤1360px 时居中」行为；v1.18.35 只单点修过聊天，此处一次性覆盖全部视图。 */
-.content > section { width: 100%; max-width: 1360px; margin-left: auto; margin-right: auto; }
+   block 时代的「撑满内容区、≤1360px 时居中」行为；v1.18.35 只单点修过聊天，此处一次性覆盖全部视图。
+   v1.18.50：section 自身滚动并撑满剩余高度，保证每个标签页独立滚动。 */
+.content > section {
+  width: 100%; max-width: 1360px; margin-left: auto; margin-right: auto;
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto;
+}
+
+/* v1.18.50：多标签页（Sheet Tabs）。标签条吸顶在内容区顶部，随内容区横向滚动；
+   当前标签用主色顶边 + 白底与内容区融为一体，未激活标签 hover 轻微提亮。 */
+.tab-bar {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: flex-end; gap: 2px;
+  padding: 8px 0 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+.tab-bar::-webkit-scrollbar { height: 5px; }
+.tab-bar::-webkit-scrollbar-thumb { background: #c4d0e0; border-radius: 3px; }
+.tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 13px 8px;
+  border-radius: 7px 7px 0 0;
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom-color: transparent;
+  transition: background .15s, color .15s;
+}
+.tab:hover { background: rgba(37, 99, 235, .06); color: var(--text); }
+.tab.active {
+  color: var(--text);
+  background: var(--panel);
+  border-color: var(--border);
+  border-bottom-color: var(--panel);
+  box-shadow: inset 0 2px 0 var(--primary);
+}
+.tab-title { pointer-events: none; }
+.tab-close {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; padding: 0;
+  border-radius: 4px; border: none;
+  background: transparent; color: inherit;
+  cursor: pointer; font-size: 14px; line-height: 1;
+}
+.tab-close:hover { background: rgba(220, 38, 38, .12); color: var(--danger); }
 
 /* 全局页脚（v1.18.34）：版权信息 + 版本号，位于每个界面内容区底部、常驻可见。
    仅覆盖内容区宽度（不压左侧深色侧栏）；sticky 贴底，内容滚动时始终停在视图底部。 */
