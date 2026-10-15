@@ -17,9 +17,12 @@ const toastKind = ref('success');
 const hasOwn = ref(false);
 const usingGlobalAccount = ref(true);
 const hasSavedPassword = ref(false);
+const hasSavedToken = ref(false);
 
 const wxpUserCode = ref('');
 const wxpPassword = ref(''); // 只写：留空 = 保留已存密码
+const pmisToken = ref(''); // 只写：留空 = 保留已存 PMIS 令牌
+const clearToken = ref(false); // 勾选后保存 = 清除个人令牌，回落全局 mcp.json
 const defaults = ref({ timesheetType: '', costLineId: '', processType: '', workHours: '' });
 // 知识库加载模式：all = 个人内容池 + 全局知识库；personal = 仅个人内容池（随机填充取词范围）
 const kbMode = ref('all');
@@ -30,12 +33,6 @@ const bindings = ref([]); // [{ hospitalId, hospitalName, inProjectId, inProject
 const personalBindingCodes = ref(new Set());
 const pendingClear = ref(new Set()); // 本次待清除的个人绑定（保存时以 null 提交）
 const hospitalsMsg = ref('');
-
-// 服务连接（管理员）：/server-config 非平台管理员 403 → 静默隐藏卡片
-const serverShow = ref(false);
-const server = ref(null);
-const newToken = ref('');
-const savingToken = ref(false);
 
 // 选项目弹框
 const projModal = ref(false);
@@ -88,8 +85,11 @@ async function load() {
       hasOwn.value = mine.hasOwn;
       usingGlobalAccount.value = mine.usingGlobalAccount;
       hasSavedPassword.value = Boolean(mine.config?.hasPassword);
+      hasSavedToken.value = Boolean(mine.config?.hasToken);
       wxpUserCode.value = mine.config?.wxpUserCode || '';
       wxpPassword.value = '';
+      pmisToken.value = '';
+      clearToken.value = false;
       kbMode.value = mine.config?.kbMode === 'personal' ? 'personal' : 'all';
       defaults.value = {
         timesheetType: mine.config?.defaults?.timesheetType ?? cfg.defaultTimesheetType ?? 2,
@@ -130,11 +130,6 @@ async function load() {
   } finally {
     loading.value = false;
   }
-  // 服务连接（管理员）：非平台管理员 403 → 静默不显示
-  try {
-    server.value = await api.tsServerConfig();
-    serverShow.value = true;
-  } catch { serverShow.value = false; }
 }
 
 async function testLogin() {
@@ -180,10 +175,14 @@ async function save() {
     };
     // 密码留空 = 保留已存密码（后端 patch 语义）
     if (wxpPassword.value) body.wxpPassword = wxpPassword.value;
+    // 个人 PMIS 令牌：留空 = 保留已存；勾选清除 = null（回落全局 Configs/mcp.json）
+    if (clearToken.value) body.pmisToken = null;
+    else if (pmisToken.value.trim()) body.pmisToken = pmisToken.value.trim();
     const d = await api.tsSaveMyConfig(body);
     if (!d.success) { showToast(d.message || '保存失败', 'danger'); return; }
     showToast('工时配置已保存（仅本人生效）', 'success');
     wxpPassword.value = '';
+    pmisToken.value = '';
     await load();
   } catch (e) {
     showToast('保存失败：' + (e.message || e), 'danger');
@@ -231,23 +230,6 @@ function confirmProject() {
   projModal.value = false;
 }
 
-async function saveToken() {
-  if (!newToken.value.trim()) { showToast('请先粘贴新 token', 'warn'); return; }
-  savingToken.value = true;
-  try {
-    const d = await api.tsUpdateServerToken(newToken.value.trim());
-    showToast(d.message || (d.success ? 'Token 已更新' : '更新失败'), d.success ? 'success' : 'danger');
-    if (d.success) {
-      newToken.value = '';
-      server.value = await api.tsServerConfig();
-    }
-  } catch (e) {
-    showToast('更新失败：' + (e.message || e), 'danger');
-  } finally {
-    savingToken.value = false;
-  }
-}
-
 const srcLabel = (s) => (s === 'own' ? '个人' : s === 'auto' ? '自动匹配' : s === 'sys' ? '系统默认' : '未绑定');
 const bindingCount = computed(() => bindings.value.filter((b) => Number(b.inProjectId) > 0).length);
 const ownBindingCount = computed(() => bindings.value.filter((b) => b.source === 'own').length);
@@ -269,19 +251,29 @@ onMounted(load);
     </div>
 
     <div class="set-grid">
-      <!-- 我的 WXP 账号 -->
+      <!-- 我的 WXP 账号与 PMIS 令牌（v1.18.51：令牌按登录用户隔离，每人用自己的身份调 PMIS） -->
       <div class="card">
-        <div class="card-title">我的 WXP 账号</div>
+        <div class="card-title">我的 WXP 账号与 PMIS 令牌</div>
         <label class="fld">工号（WXP/PMIS 登录账号）
           <input v-model="wxpUserCode" class="ipt" placeholder="如 11547" autocomplete="off">
         </label>
         <label class="fld">密码
           <input v-model="wxpPassword" class="ipt" type="password" :placeholder="hasSavedPassword ? '已设置（留空 = 不修改）' : '请输入密码'" autocomplete="new-password">
         </label>
+        <label class="fld">我的 PMIS 令牌（Bearer）
+          <input v-model="pmisToken" class="ipt" type="password" :placeholder="hasSavedToken ? '已设置（留空 = 不修改）' : '未设置 —— 当前使用全局令牌'" autocomplete="off">
+        </label>
+        <div class="tok-line">
+          <span v-if="hasSavedToken" class="tok-ok">✅ 正使用<b>你自己的</b> PMIS 令牌（覆盖全局配置，仅本人生效）</span>
+          <span v-else class="tok-warn">未设置个人令牌 —— 当前使用<b>全局</b> PMIS 令牌（Configs/mcp.json）</span>
+          <label v-if="hasSavedToken" class="inline-chk" title="保存后清除个人令牌，回落使用全局令牌">
+            <input v-model="clearToken" type="checkbox"> 清除并改用全局
+          </label>
+        </div>
         <div class="rowbtn">
           <button class="btn ghost" :disabled="testing" @click="testLogin">{{ testing ? '测试中...' : '测试连接' }}</button>
         </div>
-        <div class="muted small" style="margin-top:8px">密码仅用于本系统代你登录 WXP 底稿系统，保存后不回显；知识库为全体同事共享，不随个人配置变化。</div>
+        <div class="muted small" style="margin-top:8px">密码与令牌仅用于本系统代你调用 WXP / PMIS，保存后不回显（接口只返回是否已设置）。令牌按<b>登录用户</b>隔离：配置后你发起的所有 PMIS 查询、底稿、在建项目检索都走你自己的身份；未配置才回落全局账号。知识库为全体同事共享，不随个人配置变化。</div>
       </div>
 
       <!-- 填报默认值 -->
@@ -352,27 +344,6 @@ onMounted(load);
     </div>
 
     <!-- 服务连接（v1.18.46，仅平台管理员可见；非管理员接口 403 → 卡片隐藏） -->
-    <div v-if="serverShow" class="card" style="margin-top:14px">
-      <div class="card-title">服务连接（管理员）
-        <span class="muted small" style="margin-left:auto">PMIS-MCP · 即时生效，无需重启</span>
-      </div>
-      <div class="grid2">
-        <div class="fld">服务地址
-          <div class="kv">{{ server?.url || '—' }}</div>
-        </div>
-        <div class="fld">当前 Token
-          <div class="kv">{{ server?.tokenMasked || '（未配置）' }}</div>
-        </div>
-      </div>
-      <label class="fld">更换 Token（粘贴 PMIS-MCP 的新 Bearer token，保存写回 Configs/mcp.json 并自动备份）
-        <input v-model="newToken" class="ipt" type="password" placeholder="粘贴新 token" autocomplete="off">
-      </label>
-      <div v-if="server?.fromEnv" class="hint warn" style="margin-top:8px">⚠️ 当前 token 由环境变量 <b>PMIS_MCP_TOKEN</b> 覆盖，此处修改不会生效；请移除该环境变量并重启后端后再改。</div>
-      <div class="rowbtn" style="margin-top:10px">
-        <button class="btn ghost" :disabled="savingToken" @click="saveToken">{{ savingToken ? '更新中...' : '更新 Token' }}</button>
-      </div>
-    </div>
-
     <!-- 选项目弹框 -->
     <div v-if="projModal" class="modal-mask" @click.self="projModal = false">
       <div class="modal">
@@ -427,6 +398,18 @@ onMounted(load);
 .fld { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--text); margin-top: 10px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
 .rowbtn { display: flex; justify-content: flex-end; }
+
+/* 个人 PMIS 令牌状态行（v1.18.51）。
+   全局 .card label 是 flex-direction:column，勾选标签需显式改回 row 才能与文字同排 */
+.tok-line { display: flex; align-items: center; gap: 10px; margin-top: 7px; font-size: 12px; line-height: 1.5; }
+.tok-ok { color: #166534; }
+.tok-warn { color: #92400e; }
+.inline-chk {
+  display: flex; flex-direction: row; align-items: center; gap: 4px;
+  margin-left: auto; white-space: nowrap; cursor: pointer;
+  font-size: 12px; color: var(--muted); font-weight: 400;
+}
+.inline-chk input { width: auto; margin: 0; cursor: pointer; }
 .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .tbl th, .tbl td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border, #e5eaf2); vertical-align: top; }
 .tbl th { color: var(--muted); font-weight: 600; white-space: nowrap; }

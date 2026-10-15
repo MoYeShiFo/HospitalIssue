@@ -27,3 +27,6 @@ backend/Configs/wxp.json
 backend/Configs/backup/
 # 知识库为运行时个人数据，不入库
 backend/Configs/timesheet-kb.json
+# TFS PAT 令牌 / 电子签名图片（个人信息），不入库；模板见 tfs.example.json
+backend/Configs/tfs.json
+backend/Configs/signatures/
