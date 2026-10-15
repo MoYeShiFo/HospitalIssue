@@ -15,6 +15,7 @@ import {
   getWxpSettings, getMcpServer, updateMcpToken,
 } from '../timesheet/configs.js';
 import { getUserTsConfig, saveUserTsConfig, publicTsConfig } from '../timesheet/userConfig.js';
+import { resolveCred, normAuthOverride, userContext as tsContext } from '../timesheet/context.js';
 import { getPmisUserId, callPmisApi } from '../timesheet/pmisMcp.js';
 import {
   runExclusive, ensurePmisToken, invalidateAndRefresh, queryMyCustomerList,
@@ -29,29 +30,7 @@ function num(v, dflt) {
   return Number.isFinite(n) ? n : dflt;
 }
 
-// —— 生效凭据解析：个人配置（工号+密码齐备）优先，否则回落系统默认账号 ——
-function resolveCred(own) {
-  const g = getWxpSettings();
-  if (own?.wxpUserCode && own?.wxpPassword) {
-    return { userCode: own.wxpUserCode, password: own.wxpPassword, source: 'own' };
-  }
-  if (g.userCode && g.password) {
-    return { userCode: g.userCode, password: g.password, source: 'global' };
-  }
-  return { userCode: '', password: '', source: 'none' };
-}
-
-/** 个人 PMIS-MCP token：配置了 = 整条链路走本人 token（覆盖全局 mcp.json）；未配置 = null（行为不变） */
-function normAuthOverride(own) {
-  const t = String(own?.pmisToken || '').trim();
-  return t || null;
-}
-
-/** 每次请求的工时上下文：个人配置（可能为 null）+ 生效凭据 + 个人 token 覆盖 */
-async function tsContext(req) {
-  const own = await getUserTsConfig({ userId: req.user.id, username: req.user.username });
-  return { own, cred: resolveCred(own), auth: normAuthOverride(own) };
-}
+// —— 生效凭据解析：已抽到 timesheet/context.js 共用（resolveCred / normAuthOverride / tsContext） ——
 
 /** 医院→在建项目绑定合并：个人绑定覆盖同名医院，未配置的回落全局 */
 function mergedBindings(own) {
@@ -126,6 +105,13 @@ router.put('/my-config', authenticate, async (req, res) => {
   if (b.wxpPassword != null && typeof b.wxpPassword !== 'string') {
     return res.json({ success: false, message: '密码格式不正确' });
   }
+  // 个人 PMIS-MCP token：字符串 = 设置/覆盖（'' 清除，回落全局 mcp.json）；null = 清除；缺省 = 保留
+  if (b.pmisToken != null && typeof b.pmisToken !== 'string') {
+    return res.json({ success: false, message: 'PMIS 令牌格式不正确' });
+  }
+  if (typeof b.pmisToken === 'string' && b.pmisToken.length > 600) {
+    return res.json({ success: false, message: 'PMIS 令牌超长（上限 600 字符）' });
+  }
   if (b.wxpUserCode === '' && (b.wxpPassword == null || b.wxpPassword === '')) {
     // 清空凭据 = 回落系统默认账号（允许，但需要显式清空两个字段）
   }
@@ -135,6 +121,7 @@ router.put('/my-config', authenticate, async (req, res) => {
       {
         wxpUserCode: b.wxpUserCode,
         wxpPassword: b.wxpPassword,
+        pmisToken: b.pmisToken,
         kbMode: b.kbMode,
         contents: b.contents,
         defaults: b.defaults,
@@ -145,7 +132,7 @@ router.put('/my-config', authenticate, async (req, res) => {
       username: req.user.username,
       action: 'UPDATE_TS_CONFIG',
       target: req.user.username,
-      detail: `工号=${saved.wxpUserCode || '（空）'}；默认值=${Object.keys(saved.defaults).length} 项；绑定=${Object.keys(saved.bindings).length} 家`,
+      detail: `工号=${saved.wxpUserCode || '（空）'}；默认值=${Object.keys(saved.defaults).length} 项；绑定=${Object.keys(saved.bindings).length} 家；PMIS令牌=${saved.pmisToken ? '个人' : '全局'}`,
     });
     return res.json({ success: true, message: '工时配置已保存（仅本人生效）', config: publicTsConfig(saved) });
   } catch (err) {
@@ -171,7 +158,7 @@ router.post('/my-config/test', authenticate, async (req, res) => {
 // 供工时配置页标注来源；inProjectId/inProjectName 恒为「当前生效值」，工时登记页零改动直接受益。
 router.get('/hospitals', authenticate, async (req, res) => {
   try {
-    const { own, cred } = await tsContext(req);
+    const { own, cred, auth } = await tsContext(req);
     const core = await runExclusive(async () => {
       for (let attempt = 0; attempt < 2; attempt++) {
         const token = await ensurePmisToken(cred);
@@ -193,7 +180,7 @@ router.get('/hospitals', authenticate, async (req, res) => {
     const localCfgs = mergedBindings(own);
     const autos = await Promise.all(core.hospitals.map(async (h) => {
       try {
-        const found = await searchPmisProjects({ customerId: h.hospitalCode });
+        const found = await searchPmisProjects({ customerId: h.hospitalCode, auth });
         const hit = found.ok ? (found.items[0] || null) : null; // 已按"执行中优先 + 项目ID倒序"排序，取第一个
         return hit ? { inProjectId: hit.inProjectId, inProjectName: hit.inProjectName } : null;
       } catch { return null; }
@@ -271,13 +258,14 @@ router.put('/server-config', authenticate, requirePlatformAdmin(), async (req, r
 // —— 检索内核抽为 searchPmisProjects（v1.18.46）：/projects 与 /hospitals 的自动匹配共用
 // v1.18.49 起支持按客户ID（customerId = WXP 医院编码 = PMIS customer_id）精确检索：
 // 医院中途改名不影响匹配，客户ID 恒定。keyword 与 customer_id 可同时传（交集）。
-async function searchPmisProjects({ keyword, customerId } = {}) {
+// auth：当前登录用户的个人 PMIS 令牌（未配置 = null，回落全局 mcp.json）
+async function searchPmisProjects({ keyword, customerId, auth = null } = {}) {
   const cid = parseInt(customerId, 10);
   const kw = typeof keyword === 'string' ? keyword.trim() : '';
   if (!kw && !(cid > 0)) {
     return { ok: false, error: '缺少检索条件（客户ID / 关键字）', items: [] };
   }
-  const userId = await getPmisUserId();
+  const userId = await getPmisUserId(auth);
   if (!userId) return { ok: false, error: '获取 PMIS 用户 ID 失败（PMIS-MCP get_user_token 调用失败）', items: [] };
 
   // keyword 匹配"在建项目名称 / 合同名称"；customer_id 精确过滤客户；日期范围放宽到 2000 年，避免默认窗口漏掉老项目
@@ -288,7 +276,7 @@ async function searchPmisProjects({ keyword, customerId } = {}) {
   if (cid > 0) qp.customer_id = cid;
   if (kw) qp.keyword = kw;
   const queryParams = JSON.stringify(qp);
-  const { rows, error } = await callPmisApi('65', { user_id: userId, query_params: queryParams });
+  const { rows, error } = await callPmisApi('65', { user_id: userId, query_params: queryParams }, auth);
   if (error) return { ok: false, error, items: [] };
 
   const pick = (r, keys) => {
@@ -322,7 +310,7 @@ async function searchPmisProjects({ keyword, customerId } = {}) {
 }
 
 router.get('/projects', authenticate, async (req, res) => {
-  const { own } = await tsContext(req);
+  const { own, auth } = await tsContext(req);
   const cfgs = mergedBindings(own);
   let configuredId = 0;
   let configuredName = '';
@@ -338,9 +326,9 @@ router.get('/projects', authenticate, async (req, res) => {
     ? req.query.hospitalCode.trim() : '';
   let found;
   if (explicitKeyword) {
-    found = await searchPmisProjects({ keyword: explicitKeyword });
+    found = await searchPmisProjects({ keyword: explicitKeyword, auth });
   } else if (hospitalCode) {
-    found = await searchPmisProjects({ customerId: hospitalCode });
+    found = await searchPmisProjects({ customerId: hospitalCode, auth });
   } else {
     return res.json({ success: false, message: '缺少 hospitalCode / keyword，无法检索在建项目' });
   }
@@ -395,14 +383,14 @@ router.post('/save-project', authenticate, async (req, res) => {
 
 // 未填报日期查询（PMIS API 115 经 MCP；fillUser 缺省取本人生效工号）
 router.get('/unfilled', authenticate, async (req, res) => {
-  const { cred } = await tsContext(req);
+  const { cred, auth } = await tsContext(req);
   const fillUser = (typeof req.query.fillUser === 'string' && req.query.fillUser) || cred.userCode;
   const queryParams = {};
   if (req.query.startDate) queryParams.start_date = req.query.startDate;
   if (req.query.endDate) queryParams.end_date = req.query.endDate;
   if (fillUser) queryParams.fill_user = fillUser;
 
-  const { rows, error } = await callPmisApi('115', { user_id: null, query_params: JSON.stringify(queryParams) });
+  const { rows, error } = await callPmisApi('115', { user_id: null, query_params: JSON.stringify(queryParams) }, auth);
   if (error) return res.json({ success: false, message: error });
 
   const dates = [...new Set(rows.filter((r) => r['日期']).map((r) => r['日期']).filter(Boolean))]
@@ -583,7 +571,8 @@ router.post('/submit', authenticate, async (req, res) => {
   if (!Array.isArray(entries) || entries.length === 0) {
     return res.json({ success: false, message: '工时数据不能为空', detail: '' });
   }
-  const userId = await getPmisUserId();
+  const { auth } = await tsContext(req);
+  const userId = await getPmisUserId(auth);
   if (!userId) {
     return res.json({ success: false, message: '获取 PMIS 用户 ID 失败（MCP get_user_token 调用失败）', detail: '' });
   }
@@ -591,7 +580,7 @@ router.post('/submit', authenticate, async (req, res) => {
   const bodyObj = { user_id: userId, query_params: queryParams };
   const bodyStr = JSON.stringify(bodyObj);
 
-  const { rows, error } = await callPmisApi('111', bodyObj);
+  const { rows, error } = await callPmisApi('111', bodyObj, auth);
   if (error) return res.json({ success: false, message: `PMIS-MCP 调用失败：${error}`, detail: bodyStr });
 
   // 解析提交结果 CSV：成功导入笔数,失败笔数,总记录数
@@ -621,7 +610,8 @@ router.post('/batch-submit', authenticate, async (req, res) => {
   const entries = Array.isArray(req.body) ? req.body : [];
   if (entries.length === 0) return res.json({ success: false, message: '没有要提交的条目' });
 
-  const userId = await getPmisUserId();
+  const { auth } = await tsContext(req);
+  const userId = await getPmisUserId(auth);
   if (!userId) return res.json({ success: false, message: '获取 PMIS 用户 ID 失败' });
 
   const results = [];
@@ -640,7 +630,7 @@ router.post('/batch-submit', authenticate, async (req, res) => {
       entryObj.process_type = e.processType;
     }
     const bodyObj = { user_id: userId, query_params: JSON.stringify({ json_array: [entryObj] }) };
-    const { rows, error } = await callPmisApi('111', bodyObj);
+    const { rows, error } = await callPmisApi('111', bodyObj, auth);
 
     let ok = false;
     let pmisMsg = '';
