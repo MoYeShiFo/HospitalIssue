@@ -1,0 +1,619 @@
+{
+  "_comment": "PMIS 交易查询配置（自 HIS.OPS pmis.json 移植，仅保留交易定义；server 鉴权走 mcp.json 的 PMIS-MCP）",
+  "transactions": [
+    {
+      "api_id": "65",
+      "name": "查询在建项目",
+      "enabled": false,
+      "description": "查询权限内在建项目列表及考核收入数据；不传筛选条件时默认返回登记日期为昨天至当天、权限范围内的在建项目数据，如需查询全量请显式传入登记日期范围；支持实施机构（查询结果默认包含下级）、客户、项目集、合同、关键字（在建项目名称/合同名称模糊查询）、项目经理工号、项目类型（实施项目/服务合同项目/免费维护项目）、在建状态（库存/在建）、执行状态（执行中/已完成/已搁置）、移交状态（-3=暂不移交；-2=不移交；-1=移交中；0=未移交；1=已移交，查询待移交项目传移交状态=0）、合同类型（正式合同/内部任务单/内部合同）、合同盖章年份、登记日期范围、考核分配情况（1=机构待分配业绩>0；2=可分配奖金考核>0）等筛选条件，返回在建项目ID、名称、项目类型、在建状态、执行状态、实施机构、项目经理、考核收入、已完成考核收入、考核进度、考核完成日期、奖金考核系数、合同、项目集、客户、项目描述、移交状态、移交日期等信息。"
+    },
+    {
+      "api_id": "111",
+      "name": "新增工时填报",
+      "enabled": false,
+      "description": "适用于员工填报工时，支持一次提交多条，数据校验与PC/移动端一致，工时内容含中文需UTF-8编码传输。 智能生成（工时类型=2实施）：默认取两源并集，同一在建项目仅填一笔；用户指定数据源、日期类型或工时分摊方式时，按用户指定执行；项目工时工序类型按任务名称关键词给出建议值供确认（如「培训」→59、「部署」→53、「数据」→54）： ① WBS任务（API 64）：查计划日期=工时日期，传 manager_no=本人工号、仅看末级计划=1，内容按任务名称生成； ② 工作底稿（API 49）：默认查解决日期=工时日期，传 user_no=本人工号，内容按底稿标题生成。 服务工时（类型=1） 由事件单自动推导：按工时日期取本人处理的事件单（API 73/API 123），客户ID取事件单所属客户，工时内容按事件单标题+处理内容生成，工时参考事件单解决工时或按用户指定值填报。 一天总工时默认8H（用户可指定），平均分摊，单笔最低0.1H",
+      "DefaultTimesheetType": 2,
+      "DefaultCostLineId": 2,
+      "DefaultProcessType": 62,
+      "DefaultWorkHours": 8,
+      "RandomWorkDefaultCount": 3,
+      "InProgressStatusList": [
+        "开发处理中",
+        "实施处理中",
+        "产品分析中",
+        "测试分析中",
+        "已处理待验证",
+        "公司测试中",
+        "已验证待升级"
+      ],
+      "TimesheetTypes": [
+        {
+          "value": 2,
+          "label": "实施-无计划"
+        },
+        {
+          "value": 1,
+          "label": "服务"
+        },
+        {
+          "value": 6,
+          "label": "专项"
+        },
+        {
+          "value": 99,
+          "label": "管理"
+        }
+      ],
+      "CostLineOptions": [
+        {
+          "value": 2,
+          "label": "实施"
+        }
+      ],
+      "ProcessTypeOptions": [
+        {
+          "value": 51,
+          "label": "项目管理"
+        },
+        {
+          "value": 52,
+          "label": "用户调研"
+        },
+        {
+          "value": 53,
+          "label": "环境部署"
+        },
+        {
+          "value": 54,
+          "label": "数据交付"
+        },
+        {
+          "value": 55,
+          "label": "接口交付"
+        },
+        {
+          "value": 56,
+          "label": "模板交付"
+        },
+        {
+          "value": 57,
+          "label": "报表交付"
+        },
+        {
+          "value": 58,
+          "label": "产研协作"
+        },
+        {
+          "value": 59,
+          "label": "培训考核"
+        },
+        {
+          "value": 60,
+          "label": "集成模拟"
+        },
+        {
+          "value": 61,
+          "label": "巡检支持"
+        },
+        {
+          "value": 62,
+          "label": "移交前运维"
+        },
+        {
+          "value": 64,
+          "label": "业务参数配置"
+        }
+      ],
+      "HospitalConfigs": {
+        "9916": {
+          "hospitalName": "海盐县妇幼保健院",
+          "inProjectId": 164689,
+          "inProjectName": "金卫软件销251796_海盐县妇幼保健院_海盐县妇保院升级合同",
+          "draftViewId": ""
+        },
+        "13738": {
+          "hospitalName": "海盐县人民医院",
+          "inProjectId": 154267,
+          "inProjectName": "金卫软件销245210_海盐县人民医院_海盐县人民医院信息建设合同",
+          "draftViewId": ""
+        },
+        "20122": {
+          "hospitalName": "海盐县中医医院",
+          "inProjectId": 164533,
+          "inProjectName": "金卫软件销251995_海盐县中医院_数智国医及共享中药房建设工程—信息工程建设项目",
+          "draftViewId": ""
+        }
+      },
+      "RandomWorkContents": [
+        "参加部门日常例会，汇报项目进展及当日工作安排",
+        "与客户沟通业务需求，讨论系统优化方案",
+        "远程处理客户反馈问题，跟进解决进度",
+        "整理项目文档及运维记录，更新知识库",
+        "系统日常巡检，检查各服务运行状态",
+        "与研发沟通缺陷修复方案，跟踪问题单进展",
+        "编写及优化运维操作手册、培训材料",
+        "参加公司内部培训及技术分享",
+        "协助客户进行业务数据核对与问题排查",
+        "对接第三方接口联调，验证数据传输情况",
+        "远程培训指导客户操作，解答使用疑问",
+        "复盘项目问题，制定并落实改进计划",
+        "处理客户电话及群消息咨询，记录共性需求",
+        "编写项目周报，汇总本周工作完成情况",
+        "跟进版本升级计划，协调客户确认升级窗口"
+      ],
+      "ExcludedHospitals": [
+        {
+          "hospitalId": "10817",
+          "hospitalName": "新昌县中医院"
+        }
+      ]
+    },
+    {
+      "api_id": "115",
+      "name": "查询未填报工时",
+      "enabled": false,
+      "description": "查询权限内员工未填报工时数据；不传筛选条件时默认返回日期为昨天至今天、员工性质为正式与劳务、部门体系为实施、权限范围内的未填报工时数据；支持日期范围、员工工号、部门、员工性质、部门体系等筛选维度，返回含填报日期与未填报工时的数据集。"
+    },
+    {
+      "api_id": "73",
+      "name": "事件单明细查询",
+      "icon": "bi-ticket-detailed-fill",
+      "color": "#0ea5e9",
+      "enabled": true,
+      "description": "查询权限内事件单明细信息，权限范围覆盖查询机构数据（机构入参默认包含下级）、所负责客户单据及本人登记或处理的单据；不传筛选条件时默认返回当日登记、事件状态为处理中（含新登记、挂起）的事件单。",
+      "params": [
+        {
+          "name": "date_type",
+          "label": "日期类型",
+          "type": "select",
+          "dataType": "int",
+          "default": "1",
+          "options": [
+            {
+              "value": "1",
+              "label": "1-处理期间（期初未解决+本期新登记）"
+            },
+            {
+              "value": "2",
+              "label": "2-解决日期"
+            },
+            {
+              "value": "3",
+              "label": "3-关闭日期"
+            },
+            {
+              "value": "4",
+              "label": "4-登记日期"
+            }
+          ]
+        },
+        {
+          "name": "start_date",
+          "label": "开始日期",
+          "type": "date",
+          "default": "month_start",
+          "placeholder": "默认月初第一天"
+        },
+        {
+          "name": "end_date",
+          "label": "结束日期",
+          "type": "date",
+          "default": "today",
+          "placeholder": "默认今天"
+        },
+        {
+          "name": "incident_status",
+          "label": "事件状态",
+          "type": "multiselect",
+          "default": "1;2;5",
+          "options": [
+            {
+              "value": "5",
+              "label": "新登记"
+            },
+            {
+              "value": "1",
+              "label": "处理中"
+            },
+            {
+              "value": "2",
+              "label": "挂起"
+            },
+            {
+              "value": "3",
+              "label": "已解决"
+            },
+            {
+              "value": "4",
+              "label": "已关闭"
+            }
+          ]
+        },
+        {
+          "name": "service_status",
+          "label": "服务状态",
+          "type": "multiselect",
+          "default": "1;2;4",
+          "options": [
+            {
+              "value": "1",
+              "label": "运维中"
+            },
+            {
+              "value": "2",
+              "label": "暂停"
+            },
+            {
+              "value": "4",
+              "label": "待运维"
+            }
+          ]
+        },
+        {
+          "name": "document_category",
+          "label": "单据分类",
+          "type": "select",
+          "dataType": "int",
+          "options": [
+            {
+              "value": "",
+              "label": "全部"
+            },
+            {
+              "value": "1",
+              "label": "事件"
+            },
+            {
+              "value": "2",
+              "label": "bug"
+            }
+          ]
+        },
+        {
+          "name": "is_key_customer",
+          "label": "重点客户",
+          "type": "select",
+          "dataType": "int",
+          "options": [
+            {
+              "value": "",
+              "label": "全部"
+            },
+            {
+              "value": "1",
+              "label": "是"
+            },
+            {
+              "value": "0",
+              "label": "否"
+            }
+          ]
+        },
+        {
+          "name": "is_tfs_converted",
+          "label": "是否转TFS",
+          "type": "select",
+          "dataType": "int",
+          "options": [
+            {
+              "value": "",
+              "label": "全部"
+            },
+            {
+              "value": "1",
+              "label": "已转TFS"
+            },
+            {
+              "value": "0",
+              "label": "未转TFS"
+            }
+          ]
+        },
+        {
+          "name": "priority",
+          "label": "优先级",
+          "type": "select",
+          "dataType": "int",
+          "options": [
+            {
+              "value": "",
+              "label": "全部"
+            },
+            {
+              "value": "1",
+              "label": "优先级1（事件）"
+            },
+            {
+              "value": "2",
+              "label": "优先级2（事件）"
+            },
+            {
+              "value": "3",
+              "label": "优先级3（事件）"
+            },
+            {
+              "value": "4",
+              "label": "优先级4（请求）"
+            }
+          ]
+        },
+        {
+          "name": "overdue_days_start",
+          "label": "超期天数 起",
+          "type": "number",
+          "dataType": "int",
+          "placeholder": "最小超期天数"
+        },
+        {
+          "name": "overdue_days_end",
+          "label": "超期天数 止",
+          "type": "number",
+          "dataType": "int",
+          "placeholder": "最大超期天数"
+        },
+        {
+          "name": "implementation_org",
+          "label": "实施机构ID",
+          "type": "number",
+          "dataType": "int",
+          "placeholder": "默认全部，含下级机构"
+        },
+        {
+          "name": "business_category",
+          "label": "业务分类ID",
+          "type": "number",
+          "dataType": "int",
+          "placeholder": "默认全部"
+        },
+        {
+          "name": "customer_id",
+          "label": "客户ID",
+          "type": "number",
+          "dataType": "int",
+          "placeholder": "默认全部"
+        },
+        {
+          "name": "customer_manager_no",
+          "label": "客户经理工号",
+          "type": "text",
+          "placeholder": "精准匹配，默认全部"
+        },
+        {
+          "name": "engineer_no",
+          "label": "处理工程师工号",
+          "type": "text",
+          "placeholder": "精准匹配，默认全部"
+        }
+      ],
+      "longTextFields": [
+        "描述",
+        "最终方案",
+        "原因分析",
+        "TFS备注"
+      ],
+      "defaultFields": [
+        "事件单编号",
+        "客户名称",
+        "标题",
+        "事件状态",
+        "优先级",
+        "影响度",
+        "紧急度",
+        "登记时间",
+        "处理工程师",
+        "客户经理",
+        "超期天数",
+        "TFS编号",
+        "TFS状态",
+        "实施机构",
+        "城市"
+      ],
+      "fields": [
+        {
+          "name": "事件单编号",
+          "width": 150
+        },
+        {
+          "name": "客户ID",
+          "width": 90
+        },
+        {
+          "name": "客户名称",
+          "width": 180
+        },
+        {
+          "name": "客户联系人",
+          "width": 110
+        },
+        {
+          "name": "标题",
+          "width": 300
+        },
+        {
+          "name": "描述",
+          "width": 320
+        },
+        {
+          "name": "登记时间",
+          "width": 160
+        },
+        {
+          "name": "超期天数",
+          "width": 90,
+          "align": "center"
+        },
+        {
+          "name": "业务分类ID",
+          "width": 100
+        },
+        {
+          "name": "业务分类",
+          "width": 140
+        },
+        {
+          "name": "客户经理ID",
+          "width": 100
+        },
+        {
+          "name": "客户经理",
+          "width": 140
+        },
+        {
+          "name": "处理工程师ID",
+          "width": 110
+        },
+        {
+          "name": "处理工程师",
+          "width": 140
+        },
+        {
+          "name": "TFS编号",
+          "width": 110
+        },
+        {
+          "name": "TFS状态",
+          "width": 100
+        },
+        {
+          "name": "TFS关闭时间",
+          "width": 160
+        },
+        {
+          "name": "影响度",
+          "width": 90,
+          "align": "center"
+        },
+        {
+          "name": "紧急度",
+          "width": 90,
+          "align": "center"
+        },
+        {
+          "name": "优先级",
+          "width": 140,
+          "align": "center"
+        },
+        {
+          "name": "事件类型",
+          "width": 110
+        },
+        {
+          "name": "报障方式",
+          "width": 100
+        },
+        {
+          "name": "录入来源",
+          "width": 100
+        },
+        {
+          "name": "事件状态",
+          "width": 100,
+          "align": "center"
+        },
+        {
+          "name": "实施机构ID",
+          "width": 100
+        },
+        {
+          "name": "实施机构",
+          "width": 200
+        },
+        {
+          "name": "城市ID",
+          "width": 90
+        },
+        {
+          "name": "城市",
+          "width": 100
+        },
+        {
+          "name": "发生时间",
+          "width": 160
+        },
+        {
+          "name": "期望完成日期",
+          "width": 120
+        },
+        {
+          "name": "计划完成日期",
+          "width": 120
+        },
+        {
+          "name": "到期时间",
+          "width": 160
+        },
+        {
+          "name": "最终方案",
+          "width": 340
+        },
+        {
+          "name": "原因分析",
+          "width": 220
+        },
+        {
+          "name": "解决时间",
+          "width": 160
+        },
+        {
+          "name": "解决用时",
+          "width": 100,
+          "align": "center"
+        },
+        {
+          "name": "关闭时间",
+          "width": 160
+        },
+        {
+          "name": "满意度评分",
+          "width": 140
+        },
+        {
+          "name": "解决方式",
+          "width": 110
+        },
+        {
+          "name": "原因分类",
+          "width": 120
+        },
+        {
+          "name": "用户回访关闭类型",
+          "width": 140
+        },
+        {
+          "name": "是否提交知识库",
+          "width": 110,
+          "align": "center"
+        },
+        {
+          "name": "登记人",
+          "width": 140
+        },
+        {
+          "name": "登记人电话",
+          "width": 120
+        },
+        {
+          "name": "报障来源",
+          "width": 100
+        },
+        {
+          "name": "是否上传附件",
+          "width": 100,
+          "align": "center"
+        },
+        {
+          "name": "请求分类",
+          "width": 100
+        },
+        {
+          "name": "要求类型",
+          "width": 100
+        },
+        {
+          "name": "TFS备注",
+          "width": 280
+        }
+      ]
+    }
+  ]
+}

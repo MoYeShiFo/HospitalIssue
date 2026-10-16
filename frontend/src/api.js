@@ -104,6 +104,12 @@ export const PERM_MENUS = [
   { key: 'schedule', label: '值班表' },
   { key: 'timesheet', label: '工时登记' },
   { key: 'tsconfig', label: '工时配置' },
+  // v1.18.51：AI 技能五模块（与后端 permissions.js MENUS 保持一致）
+  { key: 'wxpdraft', label: 'WXP底稿查询' },
+  { key: 'tfsquery', label: 'TFS 工作项查询' },
+  { key: 'pmisquery', label: 'PMIS交易查询' },
+  { key: 'changerequest', label: '变更申请单' },
+  { key: 'golive', label: '应用上线确认单' },
 ];
 // 权限设置弹框左栏的模块列表 = 全部菜单 + 不占菜单的功能模块（与后端 PERM_MODULES 一致）。
 export const PERM_MODULES = [
@@ -137,7 +143,7 @@ export const PERM_ACTIONS = [
   { key: 'issue.audit', label: '审核问题', menu: 'issues' },
   { key: 'chat.use', label: '使用聊天', menu: 'chat' },
 ];
-export const MENU_ORDER = ['dashboard', 'issues', 'audited', 'kb', 'chat', 'users', 'audit', 'settings', 'schedule', 'timesheet', 'tsconfig'];
+export const MENU_ORDER = ['dashboard', 'issues', 'audited', 'kb', 'chat', 'users', 'audit', 'settings', 'schedule', 'timesheet', 'tsconfig', 'wxpdraft', 'tfsquery', 'pmisquery', 'changerequest', 'golive'];
 
 // 内置角色（与后端 BUILTIN_ROLES 一致）：不可删除，仅可改名。
 export const BUILTIN_ROLES = [
@@ -172,7 +178,7 @@ export function defaultRolePermissions(roleKey) {
   actions['issue.rate'] = true;
   actions['chat.use'] = true;
   // 值班表 / 审核通过 / 运维知识库 / 聊天 / 工时登记 / 工时配置默认对登记员等也可见（与原「全员常显」一致），管理员可关闭。
-  return { menus: ['dashboard', 'issues', 'audited', 'kb', 'schedule', 'chat', 'timesheet', 'tsconfig'], actions };
+  return { menus: ['dashboard', 'issues', 'audited', 'kb', 'schedule', 'chat', 'timesheet', 'tsconfig', 'wxpdraft', 'tfsquery', 'pmisquery', 'changerequest', 'golive'], actions };
 }
 
 // 前端兜底默认权限（仅在 /api/config 取不到时使用）
@@ -479,4 +485,23 @@ export const api = {
   // 服务连接（v1.18.46，仅平台管理员）：PMIS-MCP Token 界面化维护（非管理员 403 → 前端隐藏卡片）
   tsServerConfig: () => req('/timesheet/server-config'),
   tsUpdateServerToken: (token) => req('/timesheet/server-config', { method: 'PUT', body: JSON.stringify({ token }) }),
+
+  // —— 实施协同 · AI 技能（v1.18.51，自 HIS.OPS AISkillController 移植） ——
+  // 1) WXP 底稿查询
+  aiDraftConfig: () => req('/aiskill/draft-config'),
+  aiHospitals: (keyWord = '') => req('/aiskill/hospitals', { method: 'POST', body: JSON.stringify({ keyWord }) }),
+  aiDraftList: (data) => req('/aiskill/draft-list', { method: 'POST', body: JSON.stringify(data) }),
+  aiDraftDetail: (sheetId) => req('/aiskill/draft-detail', { method: 'POST', body: JSON.stringify({ sheetId }) }),
+  // 2) TFS 工作项查询
+  aiTfsConfig: () => req('/aiskill/tfs-config'),
+  aiTfsQuery: (data) => req('/aiskill/tfs-query', { method: 'POST', body: JSON.stringify(data) }),
+  aiTfsItem: (data) => req('/aiskill/tfs-item', { method: 'POST', body: JSON.stringify(data) }),
+  // 3) PMIS 交易查询
+  aiPmisTransactions: () => req('/aiskill/pmis-transactions'),
+  aiPmisTransactionQuery: (apiId, params) => req('/aiskill/pmis-transaction-query', { method: 'POST', body: JSON.stringify({ api_id: apiId, params }) }),
+  // 4) 应用上线确认单
+  aiGoliveConfig: () => req('/aiskill/golive-config'),
+  aiGoliveProject: (inProjectId) => req('/aiskill/golive-project-detail', { method: 'POST', body: JSON.stringify({ inProjectId }) }),
+  // 签名图（<img src> 直接引 URL，无鉴权头）
+  aiSignatureUrl: (name) => '/api/aiskill/signature/' + encodeURIComponent(name),
 };

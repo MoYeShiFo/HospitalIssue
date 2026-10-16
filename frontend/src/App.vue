@@ -23,6 +23,12 @@ import OrgSwitcher from './components/OrgSwitcher.vue';
 import OrgManage from './components/OrgManage.vue';
 import Timesheet from './components/Timesheet.vue';
 import TimesheetSettings from './components/TimesheetSettings.vue';
+// v1.18.51：AI 技能五模块（自 HIS.OPS 移植）
+import WxpDraftQuery from './components/WxpDraftQuery.vue';
+import TfsQuery from './components/TfsQuery.vue';
+import PmisQuery from './components/PmisQuery.vue';
+import ChangeRequest from './components/ChangeRequest.vue';
+import GoLiveConfirm from './components/GoLiveConfirm.vue';
 import { APP_VERSION } from './version.js';
 import { unread, refreshUnread, startUnreadPolling, stopUnreadPolling, clearUnread } from './notifications.js';
 import { unread as chatUnread, startChatPolling, stopChatPolling, refreshUnread as refreshChatUnread, clearUnread as clearChatUnread } from './chat.js';
@@ -118,11 +124,17 @@ const NAV_ITEMS = {
   orgs:         { label: '机构管理',   icon: 'orgs' },
   timesheet:    { label: '工时登记',   icon: 'timesheet' },
   tsconfig:     { label: '工时配置',   icon: 'tsconfig' },
+  // v1.18.51：AI 技能五模块
+  wxpdraft:     { label: 'WXP底稿查询',     icon: 'wxpdraft' },
+  tfsquery:     { label: 'TFS 工作项查询',  icon: 'tfsquery' },
+  pmisquery:    { label: 'PMIS交易查询',    icon: 'pmisquery' },
+  changerequest:{ label: '变更申请单',      icon: 'changerequest' },
+  golive:       { label: '应用上线确认单',  icon: 'golive' },
 };
 const NAV_GROUPS = [
   { key: 'work',  label: '业务工作', icon: 'group-work',  items: ['dashboard', 'issues', 'audited', 'kb', 'schedule'] },
   { key: 'comms', label: '沟通协作', icon: 'group-comms', items: ['chat', 'notification'] },
-  { key: 'impl',  label: '实施协同', icon: 'group-impl',  items: ['timesheet'] },
+  { key: 'impl',  label: '实施协同', icon: 'group-impl',  items: ['timesheet', 'wxpdraft', 'tfsquery', 'pmisquery', 'changerequest', 'golive'] },
   { key: 'sys',   label: '系统管理', icon: 'group-sys',   items: ['users', 'audit', 'settings', 'orgs', 'tsconfig'] },
 ];
 // 组内没有任何可见子项时整组隐藏；子项保持原菜单顺序
@@ -160,6 +172,12 @@ const ICONS = {
   settings: '<circle cx="12" cy="12" r="3.4" /><path d="M12 2.6l1.3 2.6 2.8-.7.7 2.8 2.6 1.3-1.3 2.6 1.3 2.6-2.6 1.3-.7 2.8-2.8-.7L12 21.4l-1.3-2.6-2.8.7-.7-2.8-2.6-1.3L5.9 12 4.6 9.4l2.6-1.3.7-2.8 2.8.7z" />',
   orgs: '<path d="M4 21V6.5L12 3l8 3.5V21" /><path d="M4 21h16M9.5 21v-4.6h5V21" /><path d="M8.6 9.4h1.6M13.8 9.4h1.6M8.6 12.8h1.6M13.8 12.8h1.6" />',
   timesheet: '<circle cx="12" cy="12" r="8.5" /><path d="M12 7V12l3.4 2.2" /><path d="M8.2 3.9l.8 1.6M15.8 3.9l-.8 1.6" />',
+  // v1.18.51：AI 技能五模块图标
+  wxpdraft: '<rect x="4" y="3.5" width="16" height="17" rx="2.4" /><path d="M8 7.5h8M8 11h8M8 14.5h5" /><circle cx="15.5" cy="17" r="2.4" /><path d="M17.3 18.8l2 2" />',
+  tfsquery: '<circle cx="10.5" cy="10.5" r="6.5" /><path d="M15.3 15.3L20.5 20.5" /><path d="M7.8 10.5h5.4M10.5 7.8v5.4" />',
+  pmisquery: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.2" /><path d="M3.5 9h17M9 9v10.5" /><path d="M12.5 13h4.5M12.5 16h4.5" />',
+  changerequest: '<rect x="5" y="3.5" width="14" height="17" rx="2.2" /><path d="M8.5 8h7M8.5 11.5h7M8.5 15h4" /><path d="M14.5 18.5l1.8 1.8 3.4-3.6" />',
+  golive: '<path d="M12 20.5c4.7 0 8.5-3.8 8.5-8.5S16.7 3.5 12 3.5 3.5 7.3 3.5 12s3.8 8.5 8.5 8.5z" /><path d="M12 8v4.2l3 1.8" /><path d="M9.3 2.5h5.4" />',
   tsconfig: '<path d="M4 7h9M17.5 7H20M4 12h3M11.5 12H20M4 17h9M17.5 17H20" /><circle cx="15" cy="7" r="2" /><circle cx="7.5" cy="12" r="2" /><circle cx="15" cy="17" r="2" />',
 };
 
@@ -193,6 +211,11 @@ function closeTab(v) {
     view.value = next ? next.view : firstMenu();
   }
 }
+// v1.18.51：AI 技能模块间跳转（查询页「变更申请单」按钮 → 打开变更申请单标签页）
+window.addEventListener('ai-goto', (e) => {
+  const target = String(e.detail || '');
+  if (NAV_ITEMS[target]) openTab(target);
+});
 
 // v1.18.50：标签条横向滚动 —— 显示不下时提供左右移动按钮
 const tabScroller = ref(null);
@@ -767,6 +790,12 @@ watch(sessionExpired, (fired) => {
       <KnowledgeBase v-show="view === 'kb'" />
       <Timesheet v-show="view === 'timesheet'" @go-config="openTab('tsconfig')" />
       <TimesheetSettings v-show="view === 'tsconfig'" />
+      <!-- v1.18.51：AI 技能五模块（自 HIS.OPS 移植） -->
+      <WxpDraftQuery v-show="view === 'wxpdraft'" />
+      <TfsQuery v-show="view === 'tfsquery'" />
+      <PmisQuery v-show="view === 'pmisquery'" />
+      <ChangeRequest v-show="view === 'changerequest'" />
+      <GoLiveConfirm v-show="view === 'golive'" />
       <Chat v-show="view === 'chat'" :current-user="currentUser" :can-use="can('chat.use')" :can-view-issues="canView('issues')" @open-issue="openIssueFromChat" />
       <UserManage
         v-if="canMenu('users')"

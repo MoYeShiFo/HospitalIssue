@@ -14,6 +14,12 @@ export const MENUS = [
   { key: 'schedule', label: '值班表' },
   { key: 'timesheet', label: '工时登记' },
   { key: 'tsconfig', label: '工时配置' },
+  // v1.18.51：AI 技能五模块（自 HIS.OPS 移植）
+  { key: 'wxpdraft', label: 'WXP底稿查询' },
+  { key: 'tfsquery', label: 'TFS 工作项查询' },
+  { key: 'pmisquery', label: 'PMIS交易查询' },
+  { key: 'changerequest', label: '变更申请单' },
+  { key: 'golive', label: '应用上线确认单' },
 ];
 
 // 权限设置弹框左栏的模块列表 = 全部菜单 + 不占菜单的功能模块。
@@ -91,7 +97,7 @@ export function defaultRolePermissions(roleKey) {
   actions['chat.use'] = true;
   // 值班表 / 审核通过 / 运维知识库 / 聊天 / 工时登记 / 工时配置 为「全员常显」升级而来的权限菜单，
   // 默认对登记员等也可见，保持与原「全员常显」行为一致（管理员可在权限矩阵中按需关闭）。
-  return { menus: ['dashboard', 'issues', 'audited', 'kb', 'schedule', 'chat', 'timesheet', 'tsconfig'], actions };
+  return { menus: ['dashboard', 'issues', 'audited', 'kb', 'schedule', 'chat', 'timesheet', 'tsconfig', 'wxpdraft', 'tfsquery', 'pmisquery', 'changerequest', 'golive'], actions };
 }
 
 // 把任意输入（数组 / JSON 字符串 / 缺失）归一化为合法角色列表：

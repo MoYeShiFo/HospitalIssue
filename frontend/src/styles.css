@@ -1006,3 +1006,17 @@ button.warn:hover { background: #fffbeb; border-color: #eccb8b; }
 /* toast 进出场动画 */
 .duty-toast-fade-enter-active, .duty-toast-fade-leave-active { transition: opacity .22s ease, transform .22s ease; }
 .duty-toast-fade-enter-from, .duty-toast-fade-leave-to { opacity: 0; transform: translateY(8px); }
+
+/* v1.18.58：宽表底部常驻横向滚动条（WXP底稿/TFS/PMIS 共用，配合 useHScroll 组合式函数）。
+   原生横向滚动条贴在 .table-wrap 底边，容器很高时用户须先纵向滚到底才能拖到；
+   这条同步条固定在视图最底部，与表格 scrollLeft 双向联动，任何位置都能直接拖。 */
+.hscroll {
+  flex-shrink: 0; overflow-x: auto; overflow-y: hidden;
+  height: 16px; margin-top: -6px;
+  border: 1px solid #e3e8f0; border-radius: 8px; background: #f7f9fc;
+}
+.hscroll-inner { height: 1px; }
+.hscroll::-webkit-scrollbar { height: 10px; }
+.hscroll::-webkit-scrollbar-thumb { background: #b6c0cd; border-radius: 6px; }
+.hscroll::-webkit-scrollbar-thumb:hover { background: #8a94a2; }
+.hscroll::-webkit-scrollbar-track { background: transparent; }
