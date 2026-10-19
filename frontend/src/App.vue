@@ -97,11 +97,13 @@ const canSwitchOrg = computed(() => switchableOrgs.value.length > 1);
 const showOrgBar = computed(() => !!currentUser.value && !!currentOrg.value);
 // 多机构时顶栏品牌显示**当前机构名**（v1.18.20：与右侧机构切换器同源，避免
 // 「品牌=机构级系统名称（可能是默认机构名）」与「切换器=当前机构」对不上）；
-// 单机构 / 登录页仍显示机构级「系统名称」（appName）。
+// 单机构登录后仍显示机构级「系统名称」（appName）。
+// v1.18.51：未登录（登录页，含自动退回）时浏览器标题固定为系统名称，不显示 appName。
+const LOGIN_TITLE = '软件问题登记系统';
 const brandName = computed(() =>
   (showOrgBar.value && orgs.value.length > 1 && currentOrg.value?.name)
     ? currentOrg.value.name
-    : appName.value
+    : (showOrgBar.value ? appName.value : LOGIN_TITLE)
 );
 watchEffect(() => { document.title = brandName.value; });
 // 是否可用批量操作（决定列表勾选列与批量条是否出现）
@@ -593,7 +595,7 @@ watch(sessionExpired, (fired) => {
 </script>
 
 <template>
-  <Login v-if="showLogin" :app-name="appName" @loggedIn="onLoggedIn" data-session-expired="v1.18.48-session-expired-redirect" />
+  <Login v-if="showLogin" @loggedIn="onLoggedIn" data-session-expired="v1.18.48-session-expired-redirect" />
 
   <div class="layout" v-else>
     <!-- v1.18.50 框架改版：整体为「左 / 上 / 下」三区（grid-template-areas 见 styles.css 的 .layout）——

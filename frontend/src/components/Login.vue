@@ -3,8 +3,10 @@ import { ref } from 'vue';
 import { api } from '../api.js';
 import { APP_VERSION } from '../version.js';
 
-const props = defineProps({ appName: String });
 const emit = defineEmits(['loggedIn']);
+// v1.18.51：登录页固定显示系统名称，不再读取机构级 appName 配置
+//（appName 可能被配置成医院名，自动退回登录时不希望暴露/混淆）。
+const FIXED_TITLE = '软件问题登记系统';
 const username = ref('');
 const password = ref('');
 const error = ref('');
@@ -28,7 +30,7 @@ async function submit() {
 <template>
   <div class="login-mask">
     <div class="login-card">
-      <h2>{{ appName || '医院信息科 · 软件问题登记' }}</h2>
+      <h2>{{ FIXED_TITLE }}</h2>
       <p class="sub">请登录后使用</p>
       <label>用户名<input v-model="username" @keyup.enter="submit" autofocus /></label>
       <label>密码<input v-model="password" type="password" @keyup.enter="submit" /></label>
