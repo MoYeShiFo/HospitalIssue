@@ -1,0 +1,40 @@
+{
+  "DefaultDeveloper": "卫宁健康科技集团股份有限公司",
+  "DefaultConclusion": "按照应用要求，卫宁健康科技集团股份有限公司已基本完成项目要求的开发、实施工作，予以上线确认。",
+  "DefaultEngineer": "孙正华",
+
+  "Modules": [
+    "入院准备中心系统",
+    "日间手术管理系统",
+    "电子病历数据质量评估系统",
+    "医保结算系统"
+  ],
+
+  "HospitalConfigs": {
+    "20122": {
+      "hospitalName": "海盐县中医医院",
+      "inProjectId": 174571,
+      "inProjectName": "金卫软件销251955-海盐县数智国医及共享中药房建设工程"
+    },
+    "13738": {
+      "hospitalName": "海盐县人民医院",
+      "inProjectId": 166065,
+      "inProjectName": "金卫软件销245211-3_海盐县人民医院_新增医保脱卡支付结算功能"
+    },
+    "9916": {
+      "hospitalName": "海盐县妇幼保健院",
+      "inProjectId": 164689,
+      "inProjectName": "海盐县妇保院升级合同"
+    },
+    "21204": {
+      "hospitalName": "海盐县康复护理院",
+      "inProjectId": 177443,
+      "inProjectName": "海盐县康复护理院门诊拆分"
+    },
+    "__TEMPLATE__": {
+      "hospitalName": "医院名称",
+      "inProjectId": 0,
+      "inProjectName": ""
+    }
+  }
+}

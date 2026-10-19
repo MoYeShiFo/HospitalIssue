@@ -4,7 +4,7 @@
 // 由后端 routes/timesheet.js 代理到 WXP 系统（AISkillController），认证全部在上游承担。
 // 交互与 WXP 原版一致：单日模式（查未填日期 → 拉底稿生成工作内容 → 预览 → 提交）
 // + 全部医院批量模式（8 小时按当天关闭底稿占比均分）+ 工时工作知识库。
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { api } from '../api.js';
 
 // 「⚙ 配置」按钮 → 跳转左侧菜单「工时配置」页（App.vue 接收后切 view）
@@ -25,6 +25,8 @@ const unfilledTotal = ref(0);
 const querying = ref(false);
 const rangeStart = ref('');
 const rangeEnd = ref('');
+// 当前生效的快捷范围（today/week/month），手动改日期输入框后清空（v1.18.53：快捷按钮选中高亮 + 与个人默认范围联动）
+const rangeKind = ref('');
 const selectedDate = ref('');
 const form = ref({ workDate: '', type: 2, cost: 2, process: 62, hours: 8, inProjectId: '', inProjectName: '' });
 const includeInprog = ref(false);
@@ -64,6 +66,10 @@ const kbInput = ref('');
 const kbBusy = ref(false);
 // 知识库加载模式（工时配置里设置）：all = 个人内容池+全局知识库；personal = 仅个人内容池。随机填充取词范围
 const kbMode = ref('all');
+// 默认查询日期范围（工时配置里设置）：进入页面时未填报查询的快捷范围 today/week/month
+const defaultRange = ref('week');
+// 全部模式无满足医院时的动作（工时配置里设置，v1.18.56）：manual=退出后手工选择医院；first=自动选中第一家医院
+const noMatchAction = ref('manual');
 // 随机填充条数（单日 / 批量模式共用），1~10
 const randomCount = ref(1);
 // 个人内容池（存在本人工时配置 contents 里，仅本人可用）；管理弹框双 Tab：个人内容池 / 系统知识库
@@ -88,6 +94,7 @@ function fmtDate(d) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 function quickRange(kind) {
+  rangeKind.value = kind;
   const now = new Date();
   const end = fmtDate(now);
   if (kind === 'today') { rangeStart.value = end; }
@@ -107,6 +114,11 @@ async function loadConfig() {
     const d = await api.tsConfig();
     cfg.value = d;
     kbMode.value = d.kbMode === 'personal' ? 'personal' : 'all';
+    defaultRange.value = ['today', 'week', 'month'].includes(d.defaultRange) ? d.defaultRange : 'week';
+    // 随机填充默认条数（工时配置里设置，1~10）：仅作为初始值，页面上仍可手动调整
+    randomCount.value = Math.min(10, Math.max(1, parseInt(d.defaultRandomCount, 10) || 1));
+    // 全部模式无满足医院时的动作（工时配置里设置，v1.18.56）
+    noMatchAction.value = d.noMatchAction === 'first' ? 'first' : 'manual';
     form.value.type = d.defaultTimesheetType ?? 2;
     form.value.cost = d.defaultCostLineId ?? 2;
     form.value.process = d.defaultProcessType ?? 62;
@@ -187,9 +199,10 @@ async function selectDate(dateStr) {
   selectedDate.value = dateStr;
   form.value.workDate = dateStr;
   // 全部医院模式下：日期带入批量填报日期并自动重新分析
+  // fromDateSelect=true：用户点了某个具体未填报日期——分析为空时才自动退出全部模式（v1.18.53）
   if (mode.value === 'all') {
     allDate.value = dateStr;
-    await loadAllDrafts();
+    await loadAllDrafts({ fromDateSelect: true });
     return;
   }
   // 单日模式：未选医院时自动选第一家，保证点日期即联动右侧加载工时
@@ -227,9 +240,9 @@ function addAiTag() {
 }
 
 // 随机填充：按个人「知识库加载模式」（工时配置里设置）从 /contents-random 取 N 条填入工作内容
-//   all = 个人内容池 + 全局知识库；personal = 仅个人内容池。已有内容时追加换行，不覆盖。
+//   all = 个人内容池 + 全局知识库；personal = 仅个人内容池。覆盖式填充（不累加已有内容，v1.18.55）。
 //   默认补加【AI工时】标记（已有则不重复加）
-async function randomFillText(current, count = 1) {
+async function randomFillText(count = 1) {
   const n = Math.max(1, Math.min(parseInt(count, 10) || 1, 10));
   const d = await api.tsContentsRandom(n);
   if (!d.success) { showToast(d.message || '随机取词失败', 'danger'); return null; }
@@ -240,20 +253,19 @@ async function randomFillText(current, count = 1) {
       : '知识库和个人内容池都是空的：先到「工时工作知识库 → 管理」添加几条', 'warn');
     return null;
   }
-  const cur = String(current || '').trim();
-  let next = cur ? cur + '\n' + items.join('\n') : items.join('\n');
+  let next = items.join('\n');
   if (!next.startsWith('【AI工时】')) next = '【AI工时】\n' + next;
   return next;
 }
 async function randomFill() {
   try {
-    const next = await randomFillText(workContent.value, randomCount.value);
+    const next = await randomFillText(randomCount.value);
     if (next !== null) workContent.value = next;
   } catch (e) { showToast('随机取词失败：' + (e.message || e), 'danger'); }
 }
 async function randomFillRow(r) {
   try {
-    const next = await randomFillText(r.workContent, randomCount.value);
+    const next = await randomFillText(randomCount.value);
     if (next !== null) r.workContent = next;
   } catch (e) { showToast('随机取词失败：' + (e.message || e), 'danger'); }
 }
@@ -317,7 +329,7 @@ function enterAllMode() {
 }
 function exitAllMode() { mode.value = 'normal'; }
 
-async function loadAllDrafts() {
+async function loadAllDrafts(opts = {}) {
   if (!allDate.value) { showToast('请先选择填报日期', 'warn'); return; }
   allLoading.value = true;
   allWarning.value = '';
@@ -340,7 +352,29 @@ async function loadAllDrafts() {
       hours: r.suggestedHours ?? 0,
       expanded: true,
     }));
-    if (!allRows.value.length) showToast('当天各医院都没有本人关闭的底稿', 'info');
+    if (!allRows.value.length) {
+      // 仅当「用户点了某个具体未填报日期」触发分析且为空时，才自动退出全部模式，
+      // 回到单日模式（日期保持所选日期），方便手动填报或随机填充（v1.18.53）。
+      // 进入页面初始化 / 手动「重新分析」为空时只提示，不退出。
+      if (opts && opts.fromDateSelect) {
+        exitAllMode();
+        form.value.workDate = allDate.value;
+        selectedDate.value = allDate.value;
+        // 按个人配置「无满足时动作」决定退出后的行为（v1.18.56）：
+        //   first  = 自动选中第一家医院并加载当天底稿，直接可填报/随机填充
+        //   manual = 停留手工选择（旧行为）
+        if (noMatchAction.value === 'first' && hospitals.value.length) {
+          selHospitalId.value = hospitals.value[0].hospitalId;
+          onHospitalChange();
+          await loadDrafts(allDate.value);
+          showToast('当天没有医院满足填报条件，已退出全部模式并选中第一家医院', 'info');
+        } else {
+          showToast('当天没有医院满足填报条件，已退出全部模式 —— 可单日手动填报或随机填充', 'info');
+        }
+      } else {
+        showToast('当天没有医院满足批量填报条件（本人无已关闭底稿）', 'info');
+      }
+    }
   } catch (e) {
     showToast('批量分析失败：' + e.message, 'danger');
   } finally {
@@ -468,11 +502,20 @@ async function kbDelete(idx) {
 
 onMounted(async () => {
   await Promise.all([loadConfig(), loadHospitals()]);
-  // 默认进入「全部医院批量填报」模式并自动分析；同时按本周查询未填报日期
-  quickRange('week');
+  // 默认进入「全部医院批量填报」模式并自动分析；未填报查询用「默认查询日期范围」（工时配置里设置，默认本周）
+  quickRange(defaultRange.value);
   queryUnfilled();
   enterAllMode();
+  // 多标签页为 v-show 常驻，onMounted 只跑一次：监听「工时配置已保存」事件重读配置，
+  // 让默认查询范围 / 知识库模式等改动立即在本页联动（v1.18.53）
+  window.addEventListener('ts-config-updated', onConfigUpdated);
 });
+onUnmounted(() => window.removeEventListener('ts-config-updated', onConfigUpdated));
+async function onConfigUpdated() {
+  await loadConfig();
+  quickRange(defaultRange.value); // 按新的默认范围重设日期区间（并高亮对应快捷按钮）
+  queryUnfilled();
+}
 </script>
 
 <template>
@@ -507,14 +550,14 @@ onMounted(async () => {
         <div class="card">
           <div class="card-title">未填报日期查询</div>
           <div class="row2">
-            <input v-model="rangeStart" type="date" class="ipt">
+            <input v-model="rangeStart" type="date" class="ipt" @change="rangeKind = ''">
             <span class="muted">~</span>
-            <input v-model="rangeEnd" type="date" class="ipt">
+            <input v-model="rangeEnd" type="date" class="ipt" @change="rangeKind = ''">
           </div>
           <div class="row2" style="margin-top:6px">
-            <button class="btn ghost" @click="quickRange('today')">今日</button>
-            <button class="btn ghost" @click="quickRange('week')">本周</button>
-            <button class="btn ghost" @click="quickRange('month')">本月</button>
+            <button class="btn ghost" :class="{ active: rangeKind === 'today' }" @click="quickRange('today')">今日</button>
+            <button class="btn ghost" :class="{ active: rangeKind === 'week' }" @click="quickRange('week')">本周</button>
+            <button class="btn ghost" :class="{ active: rangeKind === 'month' }" @click="quickRange('month')">本月</button>
           </div>
           <button class="btn primary block" style="margin-top:8px" :disabled="querying" @click="queryUnfilled">
             {{ querying ? '查询中...' : '查询未填报' }}
@@ -790,6 +833,9 @@ onMounted(async () => {
   background: var(--panel); color: var(--text); font-size: 13px; cursor: pointer; white-space: nowrap;
 }
 .btn:hover { border-color: var(--primary); color: var(--primary); }
+/* .ghost 在下方会覆盖同权重的 .active 背景（白底白字看不见），故提高选择器权重保证选中态可见 */
+.btn.active, .btn.ghost.active { border-color: var(--primary); background: var(--primary); color: #fff; }
+.btn.active:hover, .btn.ghost.active:hover { background: var(--primary-d); color: #fff; }
 .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
 .btn.primary:hover { background: var(--primary-d); color: #fff; }
 .btn.success { background: #10b981; border-color: #10b981; color: #fff; }

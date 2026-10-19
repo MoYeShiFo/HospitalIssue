@@ -37,6 +37,15 @@ function sanitize(raw) {
     const v = Number(c.defaults?.[k]);
     if (Number.isFinite(v) && v >= 0) out.defaults[k] = v;
   }
+  // 默认查询日期范围（v1.18.52）：进入工时登记页时未填报查询的快捷范围（today/week/month，非法值丢弃）
+  const dr = c.defaults?.defaultRange;
+  if (dr === 'today' || dr === 'week' || dr === 'month') out.defaults.defaultRange = dr;
+  // 随机填充默认条数（v1.18.54）：1~10 整数，非法值丢弃
+  const rc = Number(c.defaults?.defaultRandomCount);
+  if (Number.isInteger(rc) && rc >= 1 && rc <= 10) out.defaults.defaultRandomCount = rc;
+  // 全部模式无满足医院时的动作（v1.18.56）：manual=退出后手工选择医院；first=自动选中第一家医院
+  const na = c.defaults?.noMatchAction;
+  if (na === 'manual' || na === 'first') out.defaults.noMatchAction = na;
   if (c.bindings && typeof c.bindings === 'object' && !Array.isArray(c.bindings)) {
     for (const [code, b] of Object.entries(c.bindings)) {
       if (!b || typeof b !== 'object') continue;
@@ -156,6 +165,18 @@ export async function saveUserTsConfig({ userId, username }, patch) {
       if (Number.isFinite(v) && v >= 0) next.defaults[k] = v;
       else if (patch.defaults[k] === null) delete next.defaults[k];
     }
+    // 默认查询日期范围：'today'/'week'/'month' = 设置；null = 清除（回落 week）；其他忽略
+    const dr = patch.defaults.defaultRange;
+    if (dr === 'today' || dr === 'week' || dr === 'month') next.defaults.defaultRange = dr;
+    else if (dr === null) delete next.defaults.defaultRange;
+    // 随机填充默认条数：1~10 整数 = 设置；null = 清除（回落 1）；其他忽略
+    const rc = Number(patch.defaults.defaultRandomCount);
+    if (Number.isInteger(rc) && rc >= 1 && rc <= 10) next.defaults.defaultRandomCount = rc;
+    else if (patch.defaults.defaultRandomCount === null) delete next.defaults.defaultRandomCount;
+    // 全部模式无满足医院时的动作：'manual'/'first' = 设置；null = 清除（回落 manual）；其他忽略
+    const na = patch.defaults.noMatchAction;
+    if (na === 'manual' || na === 'first') next.defaults.noMatchAction = na;
+    else if (na === null) delete next.defaults.noMatchAction;
   }
   if (patch.bindings && typeof patch.bindings === 'object' && !Array.isArray(patch.bindings)) {
     for (const [code, b] of Object.entries(patch.bindings)) {

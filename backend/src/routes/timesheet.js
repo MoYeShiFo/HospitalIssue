@@ -49,11 +49,20 @@ function mergedBindings(own) {
 /** 填报默认值合并：个人 defaults 覆盖全局 timesheet.json 的 Default* */
 function mergedDefaults(own) {
   const ts = getTimesheetFileConfig();
+  // 默认查询日期范围（v1.18.52）：个人配置优先；未配置 = week（与旧行为一致）
+  const dr = own?.defaults?.defaultRange;
+  // 随机填充默认条数（v1.18.54）：个人配置优先；未配置/非法 = 1（与旧行为一致）
+  const rc = Number(own?.defaults?.defaultRandomCount);
+  // 全部模式无满足医院时的动作（v1.18.56）：manual=退出后手工选择医院（旧行为）；first=自动选中第一家医院
+  const na = own?.defaults?.noMatchAction;
   return {
     defaultTimesheetType: num(own?.defaults?.timesheetType ?? ts.DefaultTimesheetType, 2),
     defaultCostLineId: num(own?.defaults?.costLineId ?? ts.DefaultCostLineId, 2),
     defaultProcessType: num(own?.defaults?.processType ?? ts.DefaultProcessType, 62),
     defaultWorkHours: num(own?.defaults?.workHours ?? ts.DefaultWorkHours, 8),
+    defaultRange: dr === 'today' || dr === 'month' ? dr : 'week',
+    defaultRandomCount: Number.isInteger(rc) && rc >= 1 && rc <= 10 ? rc : 1,
+    noMatchAction: na === 'first' ? 'first' : 'manual',
   };
 }
 

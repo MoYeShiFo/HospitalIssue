@@ -114,7 +114,15 @@ export function getWxpSettings() {
     pmisLoginPath: api.PmisLogin || '/wxp/training/web/pmisLogin',
     queryMyCustomerListPath: api.QueryMyCustomerList || '/wxp/draft/issue/sheet/queryMyCustomerList',
     draftListPath: api.DraftList || '/wxp/draft/issue/sheet/normal',
+    // v1.18.51：底稿详情接口 + 默认底稿视图 ID（自 HIS.OPS AISkillController 移植）
+    draftDetailPath: api.DraftDetail || '/wxp/draft/issue/sheet/find',
+    draftViewId: s.DraftViewId || api.DraftViewId || '478355027632191488',
   };
+}
+
+/** 读取 Configs/ 下任意共享 JSON（tfs.json / go-live.json / pmis-transactions.json 等，mtime 缓存） */
+export function getConfigJson(name, fallback = {}) {
+  return readJson(name, fallback);
 }
 
 export function hasConfigAccount() {

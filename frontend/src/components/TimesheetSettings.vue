@@ -23,7 +23,12 @@ const wxpUserCode = ref('');
 const wxpPassword = ref(''); // 只写：留空 = 保留已存密码
 const pmisToken = ref(''); // 只写：留空 = 保留已存 PMIS 令牌
 const clearToken = ref(false); // 勾选后保存 = 清除个人令牌，回落全局 mcp.json
-const defaults = ref({ timesheetType: '', costLineId: '', processType: '', workHours: '' });
+const showTokenGuide = ref(false); // 令牌获取指引弹窗（API 市场截图）
+function openTokenMarket() {
+  window.open('https://weberp.winning.com.cn:8100/api-market/#/home', '_blank', 'noopener');
+  showTokenGuide.value = false;
+}
+const defaults = ref({ timesheetType: '', costLineId: '', processType: '', workHours: '', defaultRange: 'week', defaultRandomCount: 1, noMatchAction: 'manual' });
 // 知识库加载模式：all = 个人内容池 + 全局知识库；personal = 仅个人内容池（随机填充取词范围）
 const kbMode = ref('all');
 
@@ -96,6 +101,11 @@ async function load() {
         costLineId: mine.config?.defaults?.costLineId ?? cfg.defaultCostLineId ?? 2,
         processType: mine.config?.defaults?.processType ?? cfg.defaultProcessType ?? 62,
         workHours: mine.config?.defaults?.workHours ?? cfg.defaultWorkHours ?? 8,
+        defaultRange: ['today', 'week', 'month'].includes(mine.config?.defaults?.defaultRange)
+          ? mine.config.defaults.defaultRange
+          : (cfg.defaultRange || 'week'),
+        defaultRandomCount: Math.min(10, Math.max(1, parseInt(mine.config?.defaults?.defaultRandomCount, 10) || 1)),
+        noMatchAction: mine.config?.defaults?.noMatchAction === 'first' ? 'first' : 'manual',
       };
       personalBindingCodes.value = new Set(Object.keys(mine.config?.bindings || {}));
     }
@@ -170,6 +180,11 @@ async function save() {
         costLineId: Number(defaults.value.costLineId) || null,
         processType: Number(defaults.value.processType) || null,
         workHours: Number(defaults.value.workHours) || null,
+        defaultRange: ['today', 'week', 'month'].includes(defaults.value.defaultRange) ? defaults.value.defaultRange : null,
+        // 随机填充默认条数：1~10，非法回落 1（后端同样校验）
+        defaultRandomCount: Math.min(10, Math.max(1, parseInt(defaults.value.defaultRandomCount, 10) || 1)),
+        // 全部模式无满足医院时的动作：manual=退出后手工选择；first=自动选中第一家医院
+        noMatchAction: defaults.value.noMatchAction === 'first' ? 'first' : 'manual',
       },
       bindings: bindingsPayload,
     };
@@ -181,6 +196,8 @@ async function save() {
     const d = await api.tsSaveMyConfig(body);
     if (!d.success) { showToast(d.message || '保存失败', 'danger'); return; }
     showToast('工时配置已保存（仅本人生效）', 'success');
+    // 通知其他常驻标签页（如「工时登记」）重读个人配置，默认查询范围/知识库模式等立即联动（v1.18.53）
+    window.dispatchEvent(new CustomEvent('ts-config-updated'));
     wxpPassword.value = '';
     pmisToken.value = '';
     await load();
@@ -261,8 +278,29 @@ onMounted(load);
           <input v-model="wxpPassword" class="ipt" type="password" :placeholder="hasSavedPassword ? '已设置（留空 = 不修改）' : '请输入密码'" autocomplete="new-password">
         </label>
         <label class="fld">我的 PMIS 令牌（Bearer）
-          <input v-model="pmisToken" class="ipt" type="password" :placeholder="hasSavedToken ? '已设置（留空 = 不修改）' : '未设置 —— 当前使用全局令牌'" autocomplete="off">
+          <span class="tok-row">
+            <input v-model="pmisToken" class="ipt" type="password" style="flex:1" :placeholder="hasSavedToken ? '已设置（留空 = 不修改）' : '未设置 —— 当前使用全局令牌'" autocomplete="off">
+            <button type="button" class="btn ghost small" @click="openTokenMarket" title="打开 API 市场，右上角「我的项目 → 令牌管理」获取/管理令牌">🔑 获取令牌</button>
+            <button type="button" class="btn ghost small" @click="showTokenGuide = true">🖼️ 示例</button>
+          </span>
         </label>
+        <!-- 令牌获取指引（API 市场截图）：登录 API 市场 → 右上角头像 → 我的项目 → 令牌管理 -->
+        <div v-if="showTokenGuide" class="tok-guide-mask" @click.self="showTokenGuide = false">
+          <div class="tok-guide">
+            <div class="tok-guide-head">
+              <b>🔑 获取 PMIS 令牌步骤</b>
+              <button type="button" class="btn ghost" @click="showTokenGuide = false">✕ 关闭</button>
+            </div>
+            <div class="tok-guide-body">
+              <ol class="tok-steps">
+                <li>点击「<b>获取令牌</b>」打开 <b>API 市场</b>并登录（完整地址：<a class="tok-link" href="https://weberp.winning.com.cn:8100/api-market/#/home" target="_blank" rel="noopener">https://weberp.winning.com.cn:8100/api-market/#/home</a>）；</li>
+                <li>右上角点<b>头像</b> → <b>我的项目</b> → <b>令牌管理</b>；</li>
+                <li>复制令牌，粘贴到「我的 PMIS 令牌」输入框后保存。</li>
+              </ol>
+              <img src="/token-guide.png" alt="API 市场令牌管理入口位置示例" class="tok-guide-img">
+            </div>
+          </div>
+        </div>
         <div class="tok-line">
           <span v-if="hasSavedToken" class="tok-ok">✅ 正使用<b>你自己的</b> PMIS 令牌（覆盖全局配置，仅本人生效）</span>
           <span v-else class="tok-warn">未设置个人令牌 —— 当前使用<b>全局</b> PMIS 令牌（Configs/mcp.json）</span>
@@ -302,6 +340,22 @@ onMounted(load);
             <select v-model="kbMode" class="ipt">
               <option value="all">全部（个人内容池 + 全局知识库）</option>
               <option value="personal">个人（仅个人内容池）</option>
+            </select>
+          </label>
+          <label class="fld">默认查询日期范围
+            <select v-model="defaults.defaultRange" class="ipt" title="进入工时登记页时，未填报日期查询的默认快捷范围">
+              <option value="today">今日</option>
+              <option value="week">本周</option>
+              <option value="month">本月</option>
+            </select>
+          </label>
+          <label class="fld">随机填充默认条数
+            <input v-model="defaults.defaultRandomCount" class="ipt" type="number" min="1" max="10" step="1" title="工时登记页「🎲 随机填充」按钮的默认条数，页面上仍可临时调整（1~10）">
+          </label>
+          <label class="fld">无满足时进入方式
+            <select v-model="defaults.noMatchAction" class="ipt" title="全部模式下点选某天分析为空（没有医院满足填报条件）退出全部模式后的进入方式">
+              <option value="manual">手动模式 · 手工选择医院</option>
+              <option value="first">手动模式 · 自动选中第一家医院</option>
             </select>
           </label>
         </div>
@@ -402,6 +456,17 @@ onMounted(load);
 /* 个人 PMIS 令牌状态行（v1.18.51）。
    全局 .card label 是 flex-direction:column，勾选标签需显式改回 row 才能与文字同排 */
 .tok-line { display: flex; align-items: center; gap: 10px; margin-top: 7px; font-size: 12px; line-height: 1.5; }
+.tok-link { color: #2f6fed; font-weight: 550; word-break: break-all; text-decoration: none; }
+.tok-link:hover { text-decoration: underline; }
+/* 令牌输入行：输入框 + 获取令牌 + 示例 */
+.tok-row { display: flex; gap: 6px; align-items: center; }
+/* 令牌获取指引弹窗 */
+.tok-guide-mask { position: fixed; inset: 0; background: rgba(15, 23, 42, .45); backdrop-filter: blur(2px); display: flex; align-items: center; justify-content: center; z-index: 60; padding: 24px; }
+.tok-guide { background: #fff; border-radius: 16px; width: 880px; max-width: 96vw; max-height: 92vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(15, 23, 42, .3); overflow: hidden; }
+.tok-guide-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid #eef1f5; }
+.tok-guide-body { padding: 14px 18px; overflow: auto; }
+.tok-steps { margin: 0 0 12px; padding-left: 20px; font-size: 13px; color: #334155; line-height: 1.9; }
+.tok-guide-img { width: 100%; border: 1px solid #e3e8f0; border-radius: 10px; }
 .tok-ok { color: #166534; }
 .tok-warn { color: #92400e; }
 .inline-chk {

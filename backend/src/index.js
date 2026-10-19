@@ -15,6 +15,7 @@ import schedulesRouter from './routes/schedules.js';
 import chatRouter from './routes/chat.js';
 import orgsRouter from './routes/orgs.js';
 import timesheetRouter from './routes/timesheet.js';
+import aiskillRouter from './routes/aiskill.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -38,6 +39,7 @@ app.use('/api/schedules', schedulesRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/orgs', orgsRouter);
 app.use('/api/timesheet', timesheetRouter);
+app.use('/api/aiskill', aiskillRouter);
 app.use('/api', problemsRouter);
 
 // 生产环境：托管前端构建产物（frontend/dist）

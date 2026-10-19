@@ -194,8 +194,18 @@ export async function queryMyCustomerList(cred, timeoutMs = 30000) {
         return { ok: false, authFailed: false, hospitals: [], message: msg || 'WXP 返回异常' };
       }
       const hospitals = r.json.data
-        .map((h) => ({ hospitalCode: h.hospitalCode || '', hospitalName: h.hospitalName || '', province: h.province || '', city: h.city || '' }))
-        .filter((h) => h.hospitalCode);
+        .map((h) => ({
+          hospitalCode: h.hospitalCode || '',
+          hospitalName: h.hospitalName || '',
+          province: h.province || '',
+          city: h.city || '',
+          projectManagerName: h.projectManagerName || '',  // 项目负责人（卡片 👤 行）
+          favorite: !!h.favorite,   // 用户在 WXP 里收藏的客户
+          pinned: !!h.pinned,       // 用户在 WXP 里置顶的客户
+        }))
+        .filter((h) => h.hospitalCode)
+        // 与 WXP 原版一致：置顶优先，其次收藏
+        .sort((a, b) => (b.pinned - a.pinned) || (b.favorite - a.favorite));
       return { ok: true, authFailed: false, hospitals, message: '' };
     } catch (err) {
       lastErr = err;
@@ -296,4 +306,75 @@ export async function queryDraftsForHospital({ cred, hospitalId, hospitalName, w
     workContent: lines.length ? lines.join('\n') + '\n' : '',
     topDrafts,
   };
+}
+
+// ---------- v1.18.51：底稿查询模块（自 HIS.OPS DraftList / DraftDetail 移植，返回原始行不做加工） ----------
+
+/**
+ * 拉一家医院的底稿原始列表（/sheet/normal）。
+ * 返回 { ok, authFailed, message, rows }；rows = 上游底稿行数组（含 27 个业务字段）。
+ */
+export async function queryHospitalDraftsRaw(cred, hospitalId, viewId, timeoutMs = 60000) {
+  const s = getWxpSettings();
+  const body = { hospitalId: Number(hospitalId) || hospitalId };
+  const vid = viewId || s.draftViewId;
+  if (vid) body.viewId = vid;
+  let lastErr = null;
+  for (let hi = 0; hi < 2; hi++) {
+    try {
+      const r = await wxpPost(s.draftListPath, body, timeoutMs, cred);
+      if (r.client === null) return { ok: false, authFailed: false, rows: [], message: '未配置 WXP 凭据：请先在「工时配置」里填写 WXP 工号与密码' };
+      const code = Number(r.json?.code) || 0;
+      const msg = typeof r.json?.message === 'string' ? r.json.message : '';
+      if (isWxpAuthFailure(code, msg)) return { ok: false, authFailed: true, rows: [], message: msg || '登录已过期' };
+      if (code !== 20000) return { ok: false, authFailed: false, rows: [], message: msg || `底稿接口返回错误（code=${code}）` };
+      const data = r.json?.data;
+      const rows = Array.isArray(data) ? data
+        : (Array.isArray(data?.list) ? data.list : (findFirstArray(data) || []));
+      return { ok: true, authFailed: false, rows, message: '' };
+    } catch (err) {
+      lastErr = err;
+      if (hi === 0) await sleep(600);
+    }
+  }
+  return { ok: false, authFailed: false, rows: [], message: lastErr?.message || '底稿列表获取失败' };
+}
+
+/** 递归找 JSON 里第一个数组（对齐 C# FindFirstArray） */
+function findFirstArray(node) {
+  if (Array.isArray(node)) return node;
+  if (node && typeof node === 'object') {
+    for (const v of Object.values(node)) {
+      const hit = findFirstArray(v);
+      if (hit) return hit;
+    }
+  }
+  return null;
+}
+
+/**
+ * 底稿详情（/sheet/find，sheetId 为 19 位长整型字符串防精度丢失）。
+ * 返回 { ok, authFailed, message, data }；data = 上游 data 并补 sourceName。
+ */
+export async function findDraftRaw(cred, sheetId, timeoutMs = 30000) {
+  const s = getWxpSettings();
+  const id = String(sheetId || '').trim();
+  if (!/^\d{1,19}$/.test(id)) return { ok: false, authFailed: false, data: null, message: '底稿编号不合法（应为纯数字编号）' };
+  try {
+    const r = await wxpPost(s.draftDetailPath, { sheetId: id }, timeoutMs, cred);
+    if (r.client === null) return { ok: false, authFailed: false, data: null, message: '未配置 WXP 凭据' };
+    const code = Number(r.json?.code) || 0;
+    const msg = typeof r.json?.message === 'string' ? r.json.message : '';
+    if (isWxpAuthFailure(code, msg)) return { ok: false, authFailed: true, data: null, message: msg || '登录已过期' };
+    if (code !== 20000) return { ok: false, authFailed: false, data: null, message: msg || `底稿详情返回错误（code=${code}）` };
+    const data = r.json?.data ?? null;
+    if (data && typeof data === 'object' && !data.sourceName) {
+      const map = { 1: '用户提出', 2: '实施内部', 3: '产品规划', 8: '其他' };
+      const sc = data.sourceCode ?? data.source;
+      if (sc != null && map[String(sc)]) data.sourceName = map[String(sc)];
+    }
+    return { ok: true, authFailed: false, data, message: '' };
+  } catch (err) {
+    return { ok: false, authFailed: false, data: null, message: err?.message || '底稿详情获取失败' };
+  }
 }

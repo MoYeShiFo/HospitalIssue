@@ -1,0 +1,110 @@
+{
+  "_comment": "TFS 查询配置（示例）。复制为 tfs.json 并填入真实 pat_token 后使用；tfs.json 已加入 .gitignore 不入库。",
+  "base_url": "http://tfs2018-web.winning.com.cn:8080/tfs",
+  "auth_method": "pat",
+  "pat_token": "在此填入 TFS PAT 令牌",
+  "user_id": "szh2",
+  "user_name": "孙正华",
+  "collections": [
+    "WN_HIS",
+    "WINNING-6.0"
+  ],
+  "user_domain": "WINNING",
+  "page_size": 100,
+  "defaultFields": [
+    "id",
+    "title",
+    "type",
+    "state",
+    "collection",
+    "resolvedDate",
+    "changedDate"
+  ],
+  "columns": [
+    {
+      "name": "id",
+      "label": "TFS编号",
+      "width": 80,
+      "align": "left",
+      "sticky": "left"
+    },
+    {
+      "name": "title",
+      "label": "标题",
+      "width": 420,
+      "align": "left"
+    },
+    {
+      "name": "type",
+      "label": "类型",
+      "width": 80,
+      "align": "center"
+    },
+    {
+      "name": "state",
+      "label": "状态",
+      "width": 100,
+      "align": "left"
+    },
+    {
+      "name": "collection",
+      "label": "集合",
+      "width": 110,
+      "align": "left"
+    },
+    {
+      "name": "assignedTo",
+      "label": "负责人",
+      "width": 150,
+      "align": "left"
+    },
+    {
+      "name": "createdDate",
+      "label": "创建日期",
+      "width": 140,
+      "align": "center"
+    },
+    {
+      "name": "changedDate",
+      "label": "修改日期",
+      "width": 140,
+      "align": "center"
+    },
+    {
+      "name": "resolvedDate",
+      "label": "解决日期",
+      "width": 140,
+      "align": "center"
+    },
+    {
+      "name": "statDate",
+      "label": "统计依据",
+      "width": 140,
+      "align": "center"
+    },
+    {
+      "name": "originalEstimate",
+      "label": "预估(h)",
+      "width": 80,
+      "align": "right"
+    },
+    {
+      "name": "remainingWork",
+      "label": "剩余(h)",
+      "width": 80,
+      "align": "right"
+    },
+    {
+      "name": "completedWork",
+      "label": "完成(h)",
+      "width": 80,
+      "align": "right"
+    },
+    {
+      "name": "aiScore",
+      "label": "AI赋能值",
+      "width": 90,
+      "align": "right"
+    }
+  ]
+}
