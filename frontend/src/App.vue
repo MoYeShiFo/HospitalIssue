@@ -732,6 +732,13 @@ watch(sessionExpired, (fired) => {
           </div>
         </div>
       </nav>
+      <!-- v1.18.69：页脚（版本 + 版权）自内容区迁入侧栏底部——给侧栏一个视觉终点，
+           分组自顶部紧凑排列时底部不再悬空；版本号常驻可见，便于截图定位反馈问题。
+           .nav 为 flex:1 撑满剩余高度，本品 naturally 落底（见 styles.css .side-foot）。 -->
+      <footer class="side-foot">
+        <span class="copy">© 2026 软件问题登记系统</span>
+        <span class="ver">{{ APP_VERSION }}</span>
+      </footer>
     </aside>
 
     <main class="content">
@@ -853,13 +860,6 @@ watch(sessionExpired, (fired) => {
         @changed="refreshOrgs"
       />
 
-      <!-- v1.18.34：全局页脚（版权信息 + 版本号），位于每个界面内容区底部。
-           作为 <main> 的末子节点，仅覆盖内容区宽度（不压左侧深色侧栏）；
-           上方 .content 的 padding-bottom:56px 让页脚自然落在右下角浮动铃铛上方，互不遮挡。 -->
-      <footer class="app-foot">
-        <span class="copy">© 2026 软件问题登记系统 · 版权所有</span>
-        <span class="ver">{{ APP_VERSION }}</span>
-      </footer>
     </main>
 
     <NotificationBell

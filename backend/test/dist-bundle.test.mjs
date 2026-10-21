@@ -271,17 +271,18 @@ try {
   assert(cssText.includes('.src.auto') && cssText.includes('.kv'), 'CSS 产物含自动匹配 chip 与 .kv 只读值样式（v1.18.46）');
   // v1.18.37：每个会话显示已读/未读状态文案必须真的编进产物
   assert(jsText.includes('未读') && jsText.includes('已读'), 'JS 产物含会话已读/未读状态文案（conv-status，v1.18.37）');
-  assert(jsText.includes('app-foot'), 'JS 产物含页脚容器类名 app-foot（v1.18.34）');
+  // v1.18.69：页脚自内容区迁入侧栏（类名 app-foot → side-foot），断言随迁保持「产物里真有」的初衷
+  assert(jsText.includes('side-foot'), 'JS 产物含页脚容器类名 side-foot（v1.18.69 迁入侧栏）');
   assert(jsText.includes('login-foot'), 'JS 产物含登录页版权条类名 login-foot（v1.18.34）');
-  assert(cssText.includes('.app-foot'), 'CSS 产物含页脚样式 .app-foot（v1.18.34）');
+  assert(cssText.includes('.side-foot'), 'CSS 产物含页脚样式 .side-foot（v1.18.69 迁入侧栏）');
   assert(cssText.includes('.login-foot'), 'CSS 产物含登录页版权条样式 .login-foot（v1.18.34）');
   // 页脚版权条用 flex 两端对齐（左版权 / 右版本），且版本号用等宽数字（tabular-nums）保证切换不跳动
-  const appFootRule = (cssText.match(/\.app-foot(?:\[[^\]]*\])?\{[^}]*\}/) || [''])[0];
-  assert(/justify-content:space-between/.test(appFootRule), '页脚版权与版本号两端对齐（space-between，v1.18.34）');
-  // 等宽数字写在版本号子元素 .app-foot .ver 上（切换版本号时数字不跳动）
-  const appFootVerRule = (cssText.match(/\.app-foot \.ver(?:\[[^\]]*\])?\{[^}]*\}/) || [''])[0];
-  assert(!!appFootVerRule, 'CSS 产物含 .app-foot .ver 规则本体（版本号子元素，v1.18.34）');
-  assert(/tabular-nums/.test(appFootVerRule), '页脚版本号用等宽数字（tabular-nums，v1.18.34）');
+  const appFootRule = (cssText.match(/\.side-foot(?:\[[^\]]*\])?\{[^}]*\}/) || [''])[0];
+  assert(/justify-content:space-between/.test(appFootRule), '页脚版权与版本号两端对齐（space-between，v1.18.34/69）');
+  // 等宽数字写在版本号子元素 .side-foot .ver 上（切换版本号时数字不跳动）
+  const appFootVerRule = (cssText.match(/\.side-foot \.ver(?:\[[^\]]*\])?\{[^}]*\}/) || [''])[0];
+  assert(!!appFootVerRule, 'CSS 产物含 .side-foot .ver 规则本体（版本号子元素，v1.18.69）');
+  assert(/tabular-nums/.test(appFootVerRule), '页脚版本号用等宽数字（tabular-nums，v1.18.34/69）');
   const loginFootRule = (cssText.match(/\.login-foot(?:\[[^\]]*\])?\{[^}]*\}/) || [''])[0];
   assert(/position:absolute/.test(loginFootRule), '登录页版权条绝对定位（贴底，v1.18.34）');
   // v1.18.35：聊天视图撑满内容区 —— .content 列向 flex 的 auto margin 会让 fit-content 收缩成窄卡，
