@@ -247,15 +247,19 @@ export function repairNames(value, depth = 0) {
 
 // 统一鉴权请求封装：带 Bearer 头；遇 401 清 token 并触发「退回登录」信号（仅对带 token 的请求，避免登录失败误触发）。
 // 返回原始 Response，由调用方按业务解析；blob / 附件下载等不走 JSON 的接口也用它，保证 401 处置一致。
+// ⚠️ v1.18.68 修复 401 清 token 竞态：hadToken 必须在**发请求前**捕获。
+//   旧代码在 401 **响应回来后**才读 getToken()——未带 token 的请求（如登录页布局闪现期间的数据预拉）
+//   401 时，若此刻 localStorage 已被另一流程写入新 token（刚登录 / 另一标签页登录），
+//   会把新 token 误清掉，导致「登录成功却又被弹回登录页」。按请求维度判定才与注释语义一致。
 async function authFetch(url, opts = {}) {
+  const hadToken = !!getToken();
   const res = await fetch(BASE + url, {
     ...opts,
     headers: authHeaders({ ...(opts.headers || {}) }),
   });
-  if (res.status === 401) {
-    const hadToken = !!getToken();
+  if (res.status === 401 && hadToken) {
     clearToken();
-    if (hadToken) raiseSessionExpired();
+    raiseSessionExpired();
   }
   return res;
 }

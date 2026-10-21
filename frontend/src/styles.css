@@ -161,11 +161,14 @@ input, select, textarea {
   min-height: 0;
   overflow-y: auto;
 }
-/* 分组折叠导航：撑满侧栏剩余高度并把分组均匀分布到整列（v1.18.68 间距优化）。
-   旧版 gap:12px + 不撑高 → 分组全堆在顶部、底部约 45% 空白，头重脚轻不美观。
-   现在 flex:1 撑高 + justify-content:space-between：内容多时间隙收紧到 12px 下限，
-   内容少时把富余光量分摊到各组之间，底部不再留一大块空白；min-height:0 防止撑爆。 */
-.nav { display: flex; flex-direction: column; gap: 12px; flex: 1 1 auto; min-height: 0; justify-content: space-between; }
+/* 分组折叠导航（v1.18.68 间距优化）：分组自顶部紧凑排列（12px 均匀间距），
+   仅把最后一组（系统管理）用 margin-top:auto 吸底。避免两类极端观感——
+   ① 全堆顶部、底部留一大块空白（头重脚轻）；② space-between 在分组收起时
+   会把少量分组拉成超大间隙（用户反馈「间距更大」更难看了）。
+   现方案：主导航紧凑在顶部、系统管理落底，中间空隙作「主功能 / 系统」天然分隔。
+   min-height:0 防止撑爆。 */
+.nav { display: flex; flex-direction: column; gap: 12px; flex: 1 1 auto; min-height: 0; }
+.nav-group:last-child { margin-top: auto; }
 .nav-group { display: flex; flex-direction: column; }
 /* 组头（v1.18.19）：内联组图标 + 组名 + 右侧 chevron（展开旋转 180°） */
 .nav-group-head {
