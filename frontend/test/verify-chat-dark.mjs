@@ -134,7 +134,9 @@ async function main() {
   startChrome({ port: cport, width: 1280, height: 880 });
   await waitDevtools(cport);
   const page = await openPage(cport, `http://127.0.0.1:${PPORT}/`);
-
+  // ⚠️ openPage 不等页面提交：导航未 commit 就访问 localStorage 会抛 SecurityError（竞态，偶发）。
+  // 先等 origin/readyState 就绪再注入 token。
+  await waitFor(page, `location.origin.startsWith('http://127.0.0.1:${PPORT}') && document.readyState === 'complete'`, 'page-ready', 15000);
   await evaluate(page, `localStorage.setItem('${TOKEN_KEY}', ${JSON.stringify(token)}); localStorage.setItem('${THEME_KEY}','dark'); localStorage.setItem('${ACCENT_KEY}','violet'); location.reload();`);
   await waitFor(page, "document.querySelector('.layout') || document.querySelector('.sidebar')", '登录后进入主界面');
   await settle(page);
