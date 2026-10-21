@@ -161,7 +161,11 @@ input, select, textarea {
   min-height: 0;
   overflow-y: auto;
 }
-.nav { display: flex; flex-direction: column; gap: 12px; }
+/* 分组折叠导航：撑满侧栏剩余高度并把分组均匀分布到整列（v1.18.68 间距优化）。
+   旧版 gap:12px + 不撑高 → 分组全堆在顶部、底部约 45% 空白，头重脚轻不美观。
+   现在 flex:1 撑高 + justify-content:space-between：内容多时间隙收紧到 12px 下限，
+   内容少时把富余光量分摊到各组之间，底部不再留一大块空白；min-height:0 防止撑爆。 */
+.nav { display: flex; flex-direction: column; gap: 12px; flex: 1 1 auto; min-height: 0; justify-content: space-between; }
 .nav-group { display: flex; flex-direction: column; }
 /* 组头（v1.18.19）：内联组图标 + 组名 + 右侧 chevron（展开旋转 180°） */
 .nav-group-head {
@@ -1115,3 +1119,118 @@ html[data-theme="dark"] .tab.active { box-shadow: inset 0 2px 0 var(--primary), 
 }
 .accent-dot:hover { transform: scale(1.15); }
 .accent-dot.on { border-color: var(--panel); box-shadow: 0 0 0 2px var(--text); }
+
+/* =====================================================================
+   v1.18.68 深色补漏：组件内 scoped 硬编码浅色表面
+   问题：组件 <style scoped> 里写死 #fff / #f7f9fc / #eef2f7 …，全局变量重定义
+   触达不到；浅色态下不可见（白底 + var(--text) 浅字 = 看不见）。
+   修复：用 html[data-theme="dark"] + 完整后代链，特异性压过 scoped
+   （scoped≈.x[data-v] ⇒ (0,2,0)；本块 html[attr] .a .b ⇒ (0,*,1) 起，更高）。
+   仅作用于深色态，浅色态零改动。顶栏 OrgSwitcher 浅色药丸为有意设计，不覆盖。
+   ===================================================================== */
+
+/* —— 聊天 Chat（重点：白色消息画布 + 气泡 + 会话列表 + 引用选择） —— */
+html[data-theme="dark"] .chat { background: var(--panel); }
+html[data-theme="dark"] .msg-box { background: var(--panel-2); }
+html[data-theme="dark"] .seg { background: var(--panel-2); }
+html[data-theme="dark"] .seg button.on { background: var(--panel); }
+html[data-theme="dark"] .new-btn { background: var(--panel); }
+html[data-theme="dark"] .ai-entry { background: color-mix(in srgb, var(--primary) 12%, var(--panel)); }
+html[data-theme="dark"] .conv-item:hover { background: var(--panel-2); }
+html[data-theme="dark"] .conv-item.active { background: color-mix(in srgb, var(--primary) 16%, var(--panel)); }
+html[data-theme="dark"] .msg.other .bubble { background: var(--panel); color: var(--text); border-color: var(--border-strong); }
+html[data-theme="dark"] .msg.ai .bubble { background: color-mix(in srgb, var(--primary) 16%, var(--panel)); color: var(--text); border-color: color-mix(in srgb, var(--primary) 35%, var(--border-strong)); }
+html[data-theme="dark"] .clip { background: var(--panel); }
+html[data-theme="dark"] .msg-file { background: var(--panel); }
+html[data-theme="dark"] .msg-act { background: var(--panel); }
+html[data-theme="dark"] .ref-card.clickable:hover { background: color-mix(in srgb, var(--primary) 12%, var(--panel)); }
+html[data-theme="dark"] .ref-chip.st-已关闭 { background: var(--panel-2); color: var(--muted); }
+html[data-theme="dark"] .pick-row:hover { background: var(--panel-2); }
+html[data-theme="dark"] .pick-row .u-type.co { background: color-mix(in srgb, var(--primary) 16%, var(--panel)); color: var(--primary); border-color: color-mix(in srgb, var(--primary) 35%, var(--border-strong)); }
+html[data-theme="dark"] .msg .recalled-bubble { background: var(--panel-2); }
+
+/* —— 引用到聊天 CiteToChat —— */
+html[data-theme="dark"] .cite-search { background: var(--panel); }
+html[data-theme="dark"] .cite-conv:hover { background: var(--panel-2); }
+html[data-theme="dark"] .cite-conv.active { background: color-mix(in srgb, var(--primary) 16%, var(--panel)); }
+
+/* —— 全局中性 chip / 行内代码（dark 下转深色，避免满屏浅灰标签） —— */
+html[data-theme="dark"] .chip { background: var(--panel-2); color: var(--muted); }
+html[data-theme="dark"] .tips code { background: var(--panel-2); color: var(--muted); }
+
+/* —— 机构 / 用户管理：模态内下拉与输入框（浅底 + var(--text) 浅字，深色下完全不可读） —— */
+html[data-theme="dark"] .add-member select,
+html[data-theme="dark"] .assign-add select,
+html[data-theme="dark"] .role-select { background: var(--panel); color: var(--text); }
+html[data-theme="dark"] .add-member select:focus,
+html[data-theme="dark"] .assign-add select:focus { background: var(--panel-2); }
+html[data-theme="dark"] .add-role .inline input { background: var(--panel); color: var(--text); }
+html[data-theme="dark"] .perm-mod.active { background: color-mix(in srgb, var(--primary) 16%, var(--panel)); color: var(--primary); }
+html[data-theme="dark"] .type-chip,
+html[data-theme="dark"] .tag-builtin { background: color-mix(in srgb, var(--primary) 16%, var(--panel)); color: var(--primary); border-color: color-mix(in srgb, var(--primary) 35%, var(--border-strong)); }
+html[data-theme="dark"] .tag-custom { background: var(--panel-2); color: var(--muted); }
+
+/* —— 审计 / 检索输入框（.x input 比基础 input 覆盖特异性更高，需显式覆盖） —— */
+html[data-theme="dark"] .audit-search input { background: var(--panel); color: var(--text); }
+
+/* —— 通知中心 / 铃铛 —— */
+html[data-theme="dark"] .nbell-x:hover { background: var(--panel-2); }
+html[data-theme="dark"] .nbell-tab { background: var(--panel); color: var(--muted); }
+html[data-theme="dark"] .nbell-tab.active { background: color-mix(in srgb, var(--primary) 16%, var(--panel)); color: var(--primary); }
+html[data-theme="dark"] .nbell-item { border-bottom-color: var(--border); }
+html[data-theme="dark"] .nbell-item:hover { background: var(--panel-2); }
+html[data-theme="dark"] .ncenter-item.unread { background: color-mix(in srgb, var(--primary) 10%, var(--panel)); }
+
+/* —— 多选下拉 MultiSelect —— */
+html[data-theme="dark"] .ms-btn { background: var(--panel); color: var(--text); border-color: var(--border-strong); }
+html[data-theme="dark"] .ms-panel { background: var(--panel); border-color: var(--border); }
+html[data-theme="dark"] .ms .ms-list .ms-item:hover { background: var(--panel-2); }
+
+/* —— 知识库中性状态 —— */
+html[data-theme="dark"] .kb-st-已关闭 { background: var(--panel-2); color: var(--muted); }
+
+/* —— 驾驶舱中性增量标签 —— */
+html[data-theme="dark"] .delta { background: var(--panel-2); color: var(--muted); }
+html[data-theme="dark"] .delta.up { color: var(--text); }
+html[data-theme="dark"] .delta.down { color: var(--muted); }
+
+/* —— 问题详情评分 / 问题表单拖拽 / 发送通知弹窗 —— */
+html[data-theme="dark"] .rate-box { background: var(--panel-2); }
+html[data-theme="dark"] .rate-btn { background: var(--panel); color: var(--text); }
+html[data-theme="dark"] .rate-box textarea { background: var(--panel); }
+html[data-theme="dark"] .dropzone.drag { background: color-mix(in srgb, var(--primary) 16%, var(--panel)); color: var(--primary); border-color: var(--primary); }
+html[data-theme="dark"] .send-users { background: var(--panel); }
+
+/* —— 导出按钮浮层 —— */
+html[data-theme="dark"] .export-pop { background: var(--panel); border-color: var(--border); }
+
+/* —— 工时设置 —— */
+html[data-theme="dark"] .tok-guide { background: var(--panel); }
+html[data-theme="dark"] .src.own { background: color-mix(in srgb, var(--primary) 16%, var(--panel)); color: var(--primary); }
+html[data-theme="dark"] .src.sys { background: var(--panel-2); color: var(--muted); }
+html[data-theme="dark"] .proj-table tbody tr:nth-child(even) td { background: var(--panel-2); }
+
+/* —— 查询类组件（PMIS / TFS / 底稿 / 变更 / 上线确认 / 工时，统一根 .ts）：
+       卡片 / 输入 / 标签 / 表头 / 菜单 / 医院卡 / 徽标 全部转深色 —— */
+html[data-theme="dark"] .ts .card { background: var(--panel); border-color: var(--border); }
+html[data-theme="dark"] .ts .ipt { background: var(--panel); color: var(--text); border-color: var(--border-strong); }
+html[data-theme="dark"] .ts .tab { background: var(--panel); color: var(--text); border-color: var(--border-strong); }
+html[data-theme="dark"] .ts .tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+html[data-theme="dark"] .ts .bg-gray { background: var(--panel-2); color: var(--muted); }
+html[data-theme="dark"] .ts table.dgrid thead th,
+html[data-theme="dark"] .ts .ptable thead th { background: var(--panel-2); color: var(--muted); }
+html[data-theme="dark"] .ts td.op,
+html[data-theme="dark"] .ts th.op { background: var(--panel); }
+html[data-theme="dark"] .ts thead th.op { background: var(--panel-2); }
+html[data-theme="dark"] .ts .ptable tfoot td { background: color-mix(in srgb, var(--primary) 16%, var(--panel)); color: var(--primary); border-color: color-mix(in srgb, var(--primary) 35%, var(--border-strong)); }
+html[data-theme="dark"] .ts .rpt-menu { background: var(--panel); border-color: var(--border); }
+html[data-theme="dark"] .ts .rpt-item:hover { background: var(--panel-2); }
+html[data-theme="dark"] .ts .rpt-quick button { background: var(--panel); color: var(--text); border-color: var(--border-strong); }
+html[data-theme="dark"] .ts .rpt-quick button.on { background: var(--primary); color: #fff; border-color: var(--primary); }
+html[data-theme="dark"] .ts .hosp-card { background: var(--panel); border-color: var(--border); }
+html[data-theme="dark"] .ts .badge.dc-slate { background: var(--panel-2); color: var(--muted); border-color: var(--border); }
+html[data-theme="dark"] .ts .badge-gray { background: var(--panel-2); color: var(--muted); }
+
+/* —— 表格横向滚动条（浅灰在深色下突兀） —— */
+html[data-theme="dark"] .table-wrap::-webkit-scrollbar-thumb { background: #334663; }
+html[data-theme="dark"] .table-wrap::-webkit-scrollbar-thumb:hover { background: #3f5480; }
