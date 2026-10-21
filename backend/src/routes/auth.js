@@ -62,8 +62,10 @@ async function resolveOrgContext(user) {
   };
 }
 
-// 组装签发给前端的登录态：token（含 org / platform 声明）+ 用户 + 机构上下文。
+// 组装签发给前端的登录态：token（含 org / platform / userType 声明）+ 用户 + 机构上下文。
 // role 一律为「当前机构内」的有效角色 —— 权限判定不再依赖全局角色。
+// userType（v1.18.70）：账号级用户类型（hospital / company），文件管理「公司用户」档
+// 可见性判定依赖它；老版本 token 无此声明，middleware 回落 hospital（与 userTypeOf 兜底一致）。
 function buildSession(user, ctx) {
   const token = signToken({
     sub: user.id,
@@ -72,6 +74,7 @@ function buildSession(user, ctx) {
     role: ctx.role,
     org: ctx.current ? ctx.current.id : null,
     platform: ctx.platform,
+    userType: user.userType === 'company' ? 'company' : 'hospital',
   });
   return {
     token,
@@ -193,6 +196,7 @@ router.post('/switch-org', authenticate, async (req, res) => {
       role,
       org: orgId,
       platform,
+      userType: user.userType === 'company' ? 'company' : 'hospital',
     });
     await audit({
       username: user.username,

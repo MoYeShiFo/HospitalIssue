@@ -32,6 +32,9 @@ export async function authenticate(req, res, next) {
     org: payload.org ?? null,
     platform,
     platformAdmin: platform,
+    // userType（v1.18.70）：账号级用户类型；老版本 token 无此声明 → 回落 hospital
+    // （与 usersDev/usersMssql 的 userTypeOf 兜底语义一致）。
+    userType: payload.userType === 'company' ? 'company' : 'hospital',
   };
 
   try {
