@@ -50,12 +50,14 @@ button {
 button:hover { background: var(--panel-2); border-color: #c4d0e0; }
 button:active { transform: translateY(1px); }
 button.primary {
-  background: linear-gradient(180deg, #3b74f6, var(--primary));
+  background: var(--primary);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 86%, #fff), var(--primary));
   border-color: var(--primary);
   color: #fff;
   box-shadow: 0 2px 10px rgba(37, 99, 235, .3);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--primary) 32%, transparent);
 }
-button.primary:hover { background: linear-gradient(180deg, #2f68ee, var(--primary-d)); }
+button.primary:hover { background: var(--primary-d); }
 button.danger { color: var(--danger); border-color: #f3c9c9; }
 button.danger:hover { background: #fef2f2; border-color: #efb4b4; }
 button:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
@@ -102,10 +104,11 @@ input, select, textarea {
 .side-brand { display: flex; align-items: center; gap: 10px; padding: 2px 6px 14px; min-width: 0; }
 .side-brand .logo {
   width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
-  background: linear-gradient(135deg, #4f8bfb, #2563eb);
+  background: linear-gradient(135deg, var(--primary), var(--primary-d));
   color: #fff; font-weight: 700; font-size: 14px;
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 4px 14px rgba(37, 99, 235, .45);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--primary) 45%, transparent);
 }
 .side-brand-title {
   color: #fff; font-size: 14px; font-weight: 600; line-height: 1.3;
@@ -139,13 +142,13 @@ input, select, textarea {
   background: var(--panel); border: 1px solid var(--border-strong);
   color: #475569; padding: 5px 11px; font-size: 12px; border-radius: 8px;
 }
-.topbar-btn:hover { background: rgba(37, 99, 235, .07); color: var(--primary); border-color: rgba(37, 99, 235, .35); }
+.topbar-btn:hover { background: rgba(37, 99, 235, .07); background: color-mix(in srgb, var(--primary) 8%, transparent); color: var(--primary); border-color: rgba(37, 99, 235, .35); border-color: color-mix(in srgb, var(--primary) 38%, transparent); }
 .theme-btn {
   width: 26px; height: 26px; padding: 0; flex-shrink: 0; border-radius: 8px;
   background: var(--panel); border: 1px solid var(--border-strong);
   color: #475569;
 }
-.theme-btn:hover { background: rgba(37, 99, 235, .07); border-color: rgba(37, 99, 235, .35); color: var(--primary); }
+.theme-btn:hover { background: rgba(37, 99, 235, .07); background: color-mix(in srgb, var(--primary) 8%, transparent); border-color: rgba(37, 99, 235, .35); border-color: color-mix(in srgb, var(--primary) 38%, transparent); color: var(--primary); }
 .theme-btn svg { width: 15px; height: 15px; display: block; }
 
 .sidebar {
@@ -301,7 +304,7 @@ input, select, textarea {
   background: transparent;
   transition: color .15s, background .15s;
 }
-.tab:hover { color: var(--text); background: rgba(37, 99, 235, .06); }
+.tab:hover { color: var(--text); background: rgba(37, 99, 235, .06); background: color-mix(in srgb, var(--primary) 7%, transparent); }
 .tab.active {
   color: var(--text);
   font-weight: 600;
@@ -447,6 +450,7 @@ input, select, textarea {
 .login-card input:focus {
   outline: none; border-color: var(--primary); background: #fff;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, .13);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
 }
 .filterbar .date { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 .filterbar .date input { min-width: 140px; min-height: 36px; }
@@ -1020,3 +1024,94 @@ button.warn:hover { background: #fffbeb; border-color: #eccb8b; }
 .hscroll::-webkit-scrollbar-thumb { background: #b6c0cd; border-radius: 6px; }
 .hscroll::-webkit-scrollbar-thumb:hover { background: #8a94a2; }
 .hscroll::-webkit-scrollbar-track { background: transparent; }
+
+/* ===== v1.18.68 主题色（data-accent）：6 种可选主色，--primary 全局生效 ===== */
+/* 默认 blue 不需要覆盖；其余主色只换主色变量，导航高亮 / 激活标签细条 / 主按钮 /
+   logo / 焦点圈等全部自动跟随（基础层已把写死的蓝色换成 var/color-mix）。 */
+html[data-accent="teal"]   { --primary: #0d9488; --primary-d: #0f766e; }
+html[data-accent="green"]  { --primary: #16a34a; --primary-d: #15803d; }
+html[data-accent="violet"] { --primary: #7c3aed; --primary-d: #6d28d9; }
+html[data-accent="rose"]   { --primary: #e11d48; --primary-d: #be123c; }
+html[data-accent="orange"] { --primary: #ea580c; --primary-d: #c2410c; }
+
+/* ===== v1.18.68 全局深色主题（html[data-theme="dark"]）===== */
+/* 修复「主题只换侧栏」：不再只有侧栏随主题——通过重定义全局变量并覆盖硬编码浅色
+   控件（按钮 / 表单 / 顶条 / 标签 / 卡片 / 弹窗 / 登录页），整体进入深色。
+   侧栏基础样式本就是深色，无需重复覆盖；浅色侧栏覆盖仅挂在 data-theme="light"。 */
+html[data-theme="dark"] {
+  --bg: #0b1526;
+  --panel: #131e33;
+  --panel-2: #1b2842;
+  --border: #24334d;
+  --border-strong: #334663;
+  --text: #e3eaf5;
+  --muted: #8ea3c0;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .45);
+  --shadow: 0 6px 20px rgba(0, 0, 0, .5);
+  --shadow-lg: 0 24px 60px rgba(0, 0, 0, .6);
+}
+/* 控件底色（基础层写死 #fff / #fbfcfe 的位置） */
+html[data-theme="dark"] button { background: var(--panel-2); }
+html[data-theme="dark"] button:hover { background: #223458; border-color: #3f5480; }
+html[data-theme="dark"] button:disabled:hover { background: var(--panel-2); }
+html[data-theme="dark"] button.danger:hover { background: rgba(220, 38, 38, .18); border-color: rgba(220, 38, 38, .45); }
+html[data-theme="dark"] button.warn:hover { background: rgba(245, 158, 11, .16); border-color: rgba(245, 158, 11, .4); }
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea { background: var(--panel); border-color: var(--border-strong); }
+html[data-theme="dark"] .filterbar input,
+html[data-theme="dark"] .filterbar select { background: var(--panel); }
+html[data-theme="dark"] .filterbar input:focus,
+html[data-theme="dark"] .filterbar select:focus,
+html[data-theme="dark"] .card input:focus,
+html[data-theme="dark"] .card select:focus,
+html[data-theme="dark"] .card textarea:focus,
+html[data-theme="dark"] .modal input:focus,
+html[data-theme="dark"] .modal select:focus,
+html[data-theme="dark"] .modal textarea:focus,
+html[data-theme="dark"] .login-card input:focus {
+  background: var(--panel-2);
+}
+html[data-theme="dark"] .grid label input,
+html[data-theme="dark"] .grid label select,
+html[data-theme="dark"] .modal label input,
+html[data-theme="dark"] .modal label select,
+html[data-theme="dark"] .modal label textarea { background: var(--panel); }
+html[data-theme="dark"] .ops-menu,
+html[data-theme="dark"] .col-pop,
+html[data-theme="dark"] .modal,
+html[data-theme="dark"] .login-card { background: var(--panel); }
+html[data-theme="dark"] .login-card input { background: var(--panel-2); }
+html[data-theme="dark"] .upload-btn { background: var(--panel-2); }
+html[data-theme="dark"] .role-pa { background: rgba(245, 158, 11, .18); color: #fbbf24; }
+/* 顶条与标签 */
+html[data-theme="dark"] .topbar { color: var(--muted); }
+html[data-theme="dark"] .topbar-user { color: var(--text); }
+html[data-theme="dark"] .topbar-btn,
+html[data-theme="dark"] .theme-btn { color: var(--muted); }
+html[data-theme="dark"] .unread-marquee {
+  color: #fca5a5;
+  background: rgba(220, 38, 38, .16);
+  border-color: rgba(220, 38, 38, .45);
+}
+html[data-theme="dark"] .unread-marquee:hover { background: rgba(220, 38, 38, .26); }
+html[data-theme="dark"] .tab.active { box-shadow: inset 0 2px 0 var(--primary), 0 -1px 4px rgba(0, 0, 0, .5); }
+
+/* ===== v1.18.68 主题色取色器（顶栏）===== */
+.accent-wrap { position: relative; flex-shrink: 0; }
+.accent-mask { position: fixed; inset: 0; z-index: 290; }
+.accent-pop {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 300;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: var(--shadow); padding: 9px 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.accent-pop-title { font-size: 12px; color: var(--muted); margin-right: 2px; white-space: nowrap; }
+.accent-dot {
+  width: 20px; height: 20px; padding: 0;
+  border: 2px solid transparent; border-radius: 50%;
+  cursor: pointer; flex-shrink: 0;
+  transition: transform .12s, border-color .12s, box-shadow .12s;
+}
+.accent-dot:hover { transform: scale(1.15); }
+.accent-dot.on { border-color: var(--panel); box-shadow: 0 0 0 2px var(--text); }

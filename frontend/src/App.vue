@@ -297,6 +297,28 @@ applyTheme(theme.value);
 
 function toggleTheme() { applyTheme(theme.value === 'dark' ? 'light' : 'dark'); }
 
+// v1.18.68：主题色（accent）—— 6 种可选主色，data-accent 驱动 --primary 全局生效
+//（导航高亮 / 激活标签细条 / 主按钮 / logo / 焦点圈等），与深浅主题正交组合。
+const ACCENT_KEY = 'issue_tracker_accent';
+const ACCENTS = [
+  { key: 'blue',   label: '科技蓝', color: '#2563eb' },
+  { key: 'teal',   label: '青碧',   color: '#0d9488' },
+  { key: 'green',  label: '翡翠绿', color: '#16a34a' },
+  { key: 'violet', label: '典雅紫', color: '#7c3aed' },
+  { key: 'rose',   label: '玫红',   color: '#e11d48' },
+  { key: 'orange', label: '暖橙',   color: '#ea580c' },
+];
+const accent = ref(ACCENTS.some(a => a.key === localStorage.getItem(ACCENT_KEY)) ? localStorage.getItem(ACCENT_KEY) : 'blue');
+const accentOpen = ref(false);
+function applyAccent(a) {
+  accent.value = a;
+  localStorage.setItem(ACCENT_KEY, a);
+  document.documentElement.setAttribute('data-accent', a);
+}
+function setAccent(a) { applyAccent(a); accentOpen.value = false; }
+applyAccent(accent.value);
+const accentLabel = computed(() => ACCENTS.find(a => a.key === accent.value)?.label || '主题色');
+
 function applyName(name) {
   if (name) {
     appName.value = name;
@@ -647,6 +669,22 @@ watch(sessionExpired, (fired) => {
             <path d="M20.2 14.4A8.4 8.4 0 0 1 9.6 3.8a8.6 8.6 0 1 0 10.6 10.6z" />
           </svg>
         </button>
+        <!-- v1.18.68：主题色取色器 —— 6 种主色即时全局切换（与深/浅主题正交组合） -->
+        <div class="accent-wrap">
+          <button class="theme-btn" :title="accentLabel" @click="accentOpen = !accentOpen">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 21a9 9 0 1 1 9-9c0 2.2-1.8 3.2-3 3.2h-1.5c-1.1 0-2 .9-2 2 0 .5.2.9.4 1.3.3.4.5.8.5 1.2 0 .9-.7 1.3-1.4 1.3z" />
+              <circle cx="7.6" cy="10.6" r="1.1" fill="currentColor" stroke="none" />
+              <circle cx="12" cy="7.4" r="1.1" fill="currentColor" stroke="none" />
+              <circle cx="16.4" cy="10.6" r="1.1" fill="currentColor" stroke="none" />
+            </svg>
+          </button>
+          <div v-if="accentOpen" class="accent-mask" @click="accentOpen = false"></div>
+          <div v-if="accentOpen" class="accent-pop">
+            <span class="accent-pop-title">主题色</span>
+            <button v-for="a in ACCENTS" :key="a.key" class="accent-dot" :class="{ on: accent === a.key }" :style="{ background: a.color }" :title="a.label" @click="setAccent(a.key)"></button>
+          </div>
+        </div>
         <span class="topbar-sep" aria-hidden="true"></span>
         <span class="topbar-user" :title="roleLabel(currentUser?.role)">{{ currentUser?.name || currentUser?.username }}</span>
         <button class="topbar-btn" @click="showPwd = true">修改密码</button>
