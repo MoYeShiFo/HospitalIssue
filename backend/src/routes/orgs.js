@@ -9,6 +9,8 @@ import {
   listOrgs, createOrg, updateOrg, removeOrg,
   getOrgStore, setMemberRole, removeMember, ensureOrgs, PLATFORM_ADMIN_ROLE,
 } from '../orgs/index.js';
+import { getFileStore } from '../files/index.js';
+import { removeStoredFiles } from '../services/uploads.js';
 
 const router = express.Router();
 
@@ -69,6 +71,16 @@ router.delete('/:id', async (req, res) => {
   try {
     const before = await (await getOrgStore()).get(req.params.id);
     await removeOrg(req.params.id);
+    // 文件管理（v1.18.70）：级联清理该机构上传的文件（登记 + 磁盘），防孤儿文件；
+    // 清理失败只记日志，不阻塞机构删除（磁盘孤儿可人工再清）。
+    try {
+      const removedFiles = await (await getFileStore()).removeByOrg(req.params.id);
+      if (removedFiles.length) {
+        await removeStoredFiles(removedFiles.map((f) => ({ storedName: f.stored_name })));
+      }
+    } catch (e) {
+      console.error('[orgs] 清理机构文件失败：', e && e.message ? e.message : e);
+    }
     await audit({
       username: req.user.username,
       action: 'DELETE_ORG',

@@ -247,6 +247,30 @@ BEGIN
 END
 GO
 
+-- 9.10) 文件管理（v1.18.70）：上传文件登记表。
+--       visibility 三档可见范围：all_orgs=全机构共享 / org=本机构 / org_company=本机构公司用户。
+--       stored_name 为磁盘随机名（hex+原扩展名），original_name 为修复编码后的原始文件名。
+--       可见性由应用层按 org_id + visibility + user_type 判定（见 src/files/visibility.js），
+--       与 src/files/mssqlFileStore.js 的 SQL WHERE 逐条等价；应用启动时也会自动执行同样的建表。
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = N'app_file')
+BEGIN
+    CREATE TABLE dbo.app_file (
+        id            BIGINT IDENTITY(1,1) PRIMARY KEY,
+        org_id        BIGINT NOT NULL DEFAULT 1,
+        visibility    NVARCHAR(16) NOT NULL DEFAULT N'org',
+        original_name NVARCHAR(255) NOT NULL,
+        stored_name   NVARCHAR(255) NOT NULL,
+        size          BIGINT NOT NULL DEFAULT 0,
+        mime          NVARCHAR(100) NOT NULL DEFAULT N'',
+        remark        NVARCHAR(500) NOT NULL DEFAULT N'',
+        uploaded_by   NVARCHAR(100) NOT NULL,
+        uploader_name NVARCHAR(100) NOT NULL DEFAULT N'',
+        created_at    DATETIME NOT NULL DEFAULT GETDATE()
+    );
+    CREATE INDEX ix_app_file_scope ON dbo.app_file (org_id, visibility, created_at);
+END
+GO
+
 -- 9.4) 用户表增量列：平台管理员标记（仅老库需要）
 IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.app_user') AND name = N'is_platform_admin')
     ALTER TABLE dbo.app_user ADD is_platform_admin BIT NOT NULL DEFAULT 0 WITH VALUES;

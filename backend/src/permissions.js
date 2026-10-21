@@ -7,6 +7,7 @@ export const MENUS = [
   { key: 'issues', label: '问题登记' },
   { key: 'audited', label: '审核通过' },
   { key: 'kb', label: '运维知识库' },
+  { key: 'files', label: '文件管理' },
   { key: 'chat', label: '聊天' },
   { key: 'users', label: '用户管理' },
   { key: 'audit', label: '操作日志' },
@@ -58,6 +59,9 @@ export const ACTIONS = [
   { key: 'schedule.manage', label: '排班管理', menu: 'schedule' },
   { key: 'issue.audit', label: '审核问题', menu: 'issues' },
   { key: 'chat.use', label: '使用聊天', menu: 'chat' },
+  // 文件管理（v1.18.70）：上传/删除为功能权限，可见范围由文件的 visibility 字段服务端判定
+  { key: 'file.upload', label: '上传文件', menu: 'files' },
+  { key: 'file.delete', label: '删除文件', menu: 'files' },
 ];
 
 // 内置角色：不可删除，仅可改名。
@@ -97,7 +101,8 @@ export function defaultRolePermissions(roleKey) {
   actions['chat.use'] = true;
   // 值班表 / 审核通过 / 运维知识库 / 聊天 / 工时登记 / 工时配置 为「全员常显」升级而来的权限菜单，
   // 默认对登记员等也可见，保持与原「全员常显」行为一致（管理员可在权限矩阵中按需关闭）。
-  return { menus: ['dashboard', 'issues', 'audited', 'kb', 'schedule', 'chat', 'timesheet', 'tsconfig', 'wxpdraft', 'tfsquery', 'pmisquery', 'changerequest', 'golive'], actions };
+  // 文件管理（v1.18.70）：默认可见但不可上传（file.upload 默认 false），部署即「只读资料库」。
+  return { menus: ['dashboard', 'issues', 'audited', 'kb', 'files', 'schedule', 'chat', 'timesheet', 'tsconfig', 'wxpdraft', 'tfsquery', 'pmisquery', 'changerequest', 'golive'], actions };
 }
 
 // 把任意输入（数组 / JSON 字符串 / 缺失）归一化为合法角色列表：

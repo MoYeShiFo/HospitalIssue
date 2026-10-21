@@ -17,6 +17,7 @@ import NotificationCenter from './components/NotificationCenter.vue';
 import DutyRoster from './components/DutyRoster.vue';
 import Audited from './components/Audited.vue';
 import KnowledgeBase from './components/KnowledgeBase.vue';
+import FileManage from './components/FileManage.vue';
 import Chat from './components/Chat.vue';
 import CiteToChat from './components/CiteToChat.vue';
 import OrgSwitcher from './components/OrgSwitcher.vue';
@@ -117,6 +118,7 @@ const NAV_ITEMS = {
   issues:       { label: '问题登记',   icon: 'issues' },
   audited:      { label: '审核通过',   icon: 'audited' },
   kb:           { label: '运维知识库', icon: 'kb' },
+  files:        { label: '文件管理',   icon: 'files' },
   schedule:     { label: '值班表',     icon: 'schedule' },
   chat:         { label: '聊天',       icon: 'chat',    badge: () => chatUnread.value },
   notification: { label: '消息通知',   icon: 'bell',    badge: () => unread.value },
@@ -134,7 +136,7 @@ const NAV_ITEMS = {
   golive:       { label: '应用上线确认单',  icon: 'golive' },
 };
 const NAV_GROUPS = [
-  { key: 'work',  label: '业务工作', icon: 'group-work',  items: ['dashboard', 'issues', 'audited', 'kb', 'schedule'] },
+  { key: 'work',  label: '业务工作', icon: 'group-work',  items: ['dashboard', 'issues', 'audited', 'kb', 'files', 'schedule'] },
   { key: 'comms', label: '沟通协作', icon: 'group-comms', items: ['chat', 'notification'] },
   { key: 'impl',  label: '实施协同', icon: 'group-impl',  items: ['timesheet', 'wxpdraft', 'tfsquery', 'pmisquery', 'changerequest', 'golive'] },
   { key: 'sys',   label: '系统管理', icon: 'group-sys',   items: ['users', 'audit', 'settings', 'orgs', 'tsconfig'] },
@@ -166,6 +168,7 @@ const ICONS = {
   issues: '<rect x="4.5" y="3.5" width="15" height="17" rx="2.5" /><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4" />',
   audited: '<circle cx="12" cy="12" r="8.6" /><path d="M8 12.4l2.6 2.6L16.2 9.4" />',
   kb: '<path d="M4.5 5.2A2.2 2.2 0 0 1 6.7 3h12.8v14.8H6.7a2.2 2.2 0 0 0-2.2 2.2z" /><path d="M4.5 20V5.2M6.7 14.2h12.8" />',
+  files: '<path d="M14.5 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5z" /><path d="M14.5 3.5v5h5M12 12.5v5M9.5 15h5" />',
   schedule: '<rect x="3.5" y="4.5" width="17" height="16" rx="2.5" /><path d="M8 2.8v3.4M16 2.8v3.4M3.5 9.6h17" /><path d="M7.8 13.5h2.4M13.8 13.5h2.4M7.8 17h2.4" />',
   chat: '<path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3.5 20l1.1-4.9A8.5 8.5 0 1 1 21 11.5z" />',
   bell: '<path d="M18 8.5a6 6 0 0 0-12 0c0 6-2.2 7.5-2.2 7.5h16.4S18 14.5 18 8.5z" /><path d="M13.7 20a2 2 0 0 1-3.4 0" />',
@@ -835,6 +838,12 @@ watch(sessionExpired, (fired) => {
       <DutyRoster v-show="view === 'schedule'" :can-manage="can('schedule.manage')" :can-platform-admin="currentUser?.platformAdmin === true" />
       <Audited v-show="view === 'audited'" :can-audit="can('issue.audit')" @view="openDetail" />
       <KnowledgeBase v-show="view === 'kb'" />
+      <FileManage
+        v-show="view === 'files'"
+        :can-upload="can('file.upload')"
+        :can-delete="can('file.delete')"
+        :can-platform-admin="currentUser?.platformAdmin === true"
+      />
       <Timesheet v-show="view === 'timesheet'" @go-config="openTab('tsconfig')" />
       <TimesheetSettings v-show="view === 'tsconfig'" />
       <!-- v1.18.51：AI 技能五模块（自 HIS.OPS 移植） -->

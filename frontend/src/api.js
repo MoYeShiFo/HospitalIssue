@@ -97,6 +97,7 @@ export const PERM_MENUS = [
   { key: 'issues', label: '问题登记' },
   { key: 'audited', label: '审核通过' },
   { key: 'kb', label: '运维知识库' },
+  { key: 'files', label: '文件管理' },
   { key: 'chat', label: '聊天' },
   { key: 'users', label: '用户管理' },
   { key: 'audit', label: '操作日志' },
@@ -142,8 +143,11 @@ export const PERM_ACTIONS = [
   { key: 'schedule.manage', label: '排班管理', menu: 'schedule' },
   { key: 'issue.audit', label: '审核问题', menu: 'issues' },
   { key: 'chat.use', label: '使用聊天', menu: 'chat' },
+  // 文件管理（v1.18.70）：上传/删除为功能权限，可见范围由文件的 visibility 字段服务端判定
+  { key: 'file.upload', label: '上传文件', menu: 'files' },
+  { key: 'file.delete', label: '删除文件', menu: 'files' },
 ];
-export const MENU_ORDER = ['dashboard', 'issues', 'audited', 'kb', 'chat', 'users', 'audit', 'settings', 'schedule', 'timesheet', 'tsconfig', 'wxpdraft', 'tfsquery', 'pmisquery', 'changerequest', 'golive'];
+export const MENU_ORDER = ['dashboard', 'issues', 'audited', 'kb', 'files', 'chat', 'users', 'audit', 'settings', 'schedule', 'timesheet', 'tsconfig', 'wxpdraft', 'tfsquery', 'pmisquery', 'changerequest', 'golive'];
 
 // 内置角色（与后端 BUILTIN_ROLES 一致）：不可删除，仅可改名。
 export const BUILTIN_ROLES = [
@@ -178,7 +182,8 @@ export function defaultRolePermissions(roleKey) {
   actions['issue.rate'] = true;
   actions['chat.use'] = true;
   // 值班表 / 审核通过 / 运维知识库 / 聊天 / 工时登记 / 工时配置默认对登记员等也可见（与原「全员常显」一致），管理员可关闭。
-  return { menus: ['dashboard', 'issues', 'audited', 'kb', 'schedule', 'chat', 'timesheet', 'tsconfig', 'wxpdraft', 'tfsquery', 'pmisquery', 'changerequest', 'golive'], actions };
+  // 文件管理（v1.18.70）：默认可见但不可上传（file.upload 默认 false），部署即「只读资料库」。
+  return { menus: ['dashboard', 'issues', 'audited', 'kb', 'files', 'schedule', 'chat', 'timesheet', 'tsconfig', 'wxpdraft', 'tfsquery', 'pmisquery', 'changerequest', 'golive'], actions };
 }
 
 // 前端兜底默认权限（仅在 /api/config 取不到时使用）
@@ -400,6 +405,38 @@ export const api = {
     a.download = filename || 'attachment';
     a.click();
     URL.revokeObjectURL(url);
+  },
+
+  // 文件管理（v1.18.70）：上传 / 三档可见范围列表 / 预览 / 下载 / 删除
+  // visibility：'all_orgs' 全机构共享（仅平台管理员可选）/ 'org' 本机构 / 'org_company' 本机构公司用户
+  uploadFile: async (file, visibility, remark) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('visibility', visibility || 'org');
+    if (remark) fd.append('remark', remark);
+    const res = await authFetch('/files', { method: 'POST', body: fd });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || '上传失败');
+    return repairNames(data);
+  },
+  listFiles: (params = {}) => req('/files' + qs(params)),
+  removeFile: (id) => req('/files/' + id, { method: 'DELETE' }),
+  downloadFile: async (id, filename) => {
+    const res = await authFetch(`/files/${id}/download`);
+    if (!res.ok) throw new Error('下载失败');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || 'file';
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+  // 预览二进制（带鉴权头 → blob → objectURL）；仅白名单类型可预览，其余走后端 302 转下载
+  fetchFileBlob: async (id) => {
+    const res = await authFetch(`/files/${id}/preview`);
+    if (!res.ok) throw new Error('预览加载失败');
+    return res.blob();
   },
 
   // 消息通知

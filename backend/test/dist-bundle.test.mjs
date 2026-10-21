@@ -201,6 +201,16 @@ try {
   assert(jsText.includes('运维知识库'), 'JS 产物含「运维知识库」（导航菜单与页面标题）');
   assert(jsText.includes('自动收录'), 'JS 产物含「自动收录」说明文案（无需手工维护）');
   assert(jsText.includes('/problems/kb'), 'JS 产物含 /problems/kb 接口路径');
+  // v1.18.70：文件管理模块必须真的编进产物（菜单 + 分类 tab + 三档徽标 + 接口路径 + 权限 key）
+  assert(jsText.includes('文件管理'), 'JS 产物含「文件管理」（导航菜单与页面标题）');
+  assert(jsText.includes('fm-tab'), 'JS 产物含文件管理分类 tab 类名 fm-tab（三档即时筛选）');
+  assert(jsText.includes('fm-badge'), 'JS 产物含三档可见范围徽标类名 fm-badge');
+  assert(jsText.includes('/files'), 'JS 产物含 /files 接口路径（文件管理 API 客户端）');
+  assert(jsText.includes('file.upload') && jsText.includes('file.delete'),
+    'JS 产物含 file.upload / file.delete 权限 key（前后端逐字一致红线）');
+  assert(cssText.includes('.fm-badge'), 'CSS 产物含三档徽标样式 .fm-badge（v1.18.70）');
+  const fmTabCountRule = (cssText.match(/\.fm-tab-count(?:\[[^\]]*\])?\{[^}]*\}/) || [''])[0];
+  assert(!!fmTabCountRule, 'CSS 产物含 .fm-tab-count 规则本体（分类计数徽标，scoped 后缀容错）');
   // v1.18.28: 数据驾驶舱「平均处理时长」改按工作日 8 小时折算 —— 口径提示文案必须真的编进产物
   assert(jsText.includes('按工作日 8 小时折算'), 'JS 产物含平均处理时长「按工作日 8 小时折算」口径提示');
   // v1.18.29：聊天「新建会话」选成员列表按类型分二级 sheet 页 —— 「院方用户/公司用户」标签与
