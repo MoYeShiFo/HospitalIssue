@@ -1,6 +1,7 @@
 // v1.18.70 验证：文件管理模块真实排版与交互（CDP + 隔离 dev 后端 + 同源代理）。
 // 断言：导航位置（业务工作组、kb 之后）/ 空态 / 分类 tab 与计数 / 上传弹窗三档
-//       （平台管理员 all_orgs 可选）/ UI 上传 → 列表徽标 / 在线预览文本 / tab 即时筛选 / 深色主题。
+//       （平台管理员 all_orgs 可选）/ UI 上传 → 列表徽标 / 在线预览文本 / tab 即时筛选 /
+//       白名单外类型预览按钮置灰（v1.18.71 修「两个下载」）/ 深色主题。
 // 用法：node test/verify-files.mjs
 import http from 'node:http';
 import { spawn } from 'node:child_process';
@@ -136,7 +137,34 @@ async function main() {
   const back = await evaluate(page, `document.querySelectorAll('.fm-page tbody tr').length`);
   check('切回「全部」恢复 1 条', back === 1, 'rows=' + back);
 
-  // ===== 8. 深色主题：页面可读、无浅色底 leak =====
+  // ===== 8. 白名单外类型（xlsx）：预览按钮置灰提示、下载按钮可用（v1.18.71 修「两个下载」）=====
+  const xlsxSample = path.join(TMP, 'CDP验证表格.xlsx');
+  fs.writeFileSync(xlsxSample, 'XLSXDATA', 'utf8');
+  const fd = new FormData();
+  fd.append('file', new Blob(['XLSXDATA']), 'CDP验证表格.xlsx');
+  fd.append('visibility', 'org');
+  const upX = await fetch(`http://127.0.0.1:${PPORT}/api/files`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
+  check('API 上传 xlsx 成功', upX.status === 201, 'status=' + upX.status);
+  await evaluate(page, `location.reload()`);
+  await waitFor(page, "document.querySelector('.sidebar')", 'sidebar-reload');
+  await settle(page); await waitAnimations(page);
+  await openFilesPage(page);
+  await waitFor(page, "[...document.querySelectorAll('.fm-page tbody tr')].some(t=>(t.textContent||'').includes('CDP验证表格.xlsx'))", 'xlsx-row', 10000);
+  await settle(page); await waitAnimations(page);
+  const ops = await evaluate(page, `(() => {
+    const trs=[...document.querySelectorAll('.fm-page tbody tr')];
+    const tr=trs.find(t=>(t.textContent||'').includes('CDP验证表格.xlsx'));
+    if(!tr) return null;
+    const btns=[...tr.querySelectorAll('td.col-ops button')];
+    const pv=btns.find(b=>b.textContent==='预览');
+    const dl=btns.find(b=>b.textContent==='下载');
+    return { pvDisabled: pv ? !!pv.disabled : null, pvTitle: pv ? pv.getAttribute('title') : null, dlDisabled: dl ? !!dl.disabled : null, btnTexts: btns.map(b=>b.textContent) };
+  })()`);
+  check('白名单外类型：预览按钮置灰并带提示', !!ops && ops.pvDisabled === true && /需下载后查看/.test(ops.pvTitle || ''), JSON.stringify(ops));
+  check('白名单外类型：下载按钮可用（不再出现两个下载）', !!ops && ops.dlDisabled === false, JSON.stringify(ops));
+  await screenshot(page, path.join(__dirname, 'files-light.png'));
+
+  // ===== 9. 深色主题：页面可读、无浅色底 leak =====
   await evaluate(page, `localStorage.setItem('issue_tracker_theme','dark'); location.reload();`);
   await waitFor(page, "document.querySelector('.sidebar')", 'sidebar-dark');
   await settle(page); await waitAnimations(page);
