@@ -231,6 +231,45 @@ function openLinkRow(r) {
   window.open(r.link_url, '_blank', 'noopener');
 }
 
+// ── 编辑登记信息（v1.18.77）：改可见范围/备注；链接行可改名称与 URL ──
+const showEdit = ref(false);
+const editRow = ref(null); // 原始行记录；link_url 非空 = 链接登记
+const editName = ref('');
+const editUrl = ref('');
+const editVisibility = ref('org');
+const editRemark = ref('');
+const editSubmitting = ref(false);
+function openEdit(r) {
+  editRow.value = r;
+  editName.value = r.original_name || '';
+  editUrl.value = r.link_url || '';
+  editVisibility.value = r.visibility;
+  editRemark.value = r.remark || '';
+  showEdit.value = true;
+}
+async function doEdit() {
+  const r = editRow.value;
+  if (!r) return;
+  const payload = { visibility: editVisibility.value, remark: editRemark.value.trim() };
+  if (r.link_url) {
+    if (!editName.value.trim()) { showToast('链接名称不能为空', 'error'); return; }
+    if (!/^https?:\/\/\S+$/i.test(editUrl.value.trim())) { showToast('链接需以 http:// 或 https:// 开头', 'error'); return; }
+    payload.name = editName.value.trim();
+    payload.url = editUrl.value.trim();
+  }
+  editSubmitting.value = true;
+  try {
+    await api.editFile(r.id, payload);
+    showEdit.value = false;
+    showToast('已保存修改');
+    load();
+  } catch (e) {
+    showToast(e.message || '保存失败', 'error');
+  } finally {
+    editSubmitting.value = false;
+  }
+}
+
 // ── 预览 / 下载 ──
 // 按扩展名分派渲染器（v1.18.73）：浏览器原生能力（image/pdf/video/audio）→ objectURL；
 // 文本/HTML 源码 → blob.text() 经 <pre> 展示（Vue 插值自动转义，不执行）；
@@ -392,6 +431,7 @@ onBeforeUnmount(() => {
                 >预览</button>
                 <button class="small" @click="download(r)">下载</button>
               </template>
+              <button v-if="canDeleteRow(r)" class="small" @click="openEdit(r)">编辑</button>
               <button v-if="canDeleteRow(r)" class="small danger" @click="askDelete(r)">删除</button>
             </td>
           </tr>
@@ -492,6 +532,54 @@ onBeforeUnmount(() => {
           <button class="small" @click="showLink = false">取消</button>
           <button class="small primary" :disabled="linkSubmitting || !linkName.trim() || !linkUrl.trim()" @click="doAddLink">
             {{ linkSubmitting ? '添加中…' : '添加链接' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 编辑登记信息弹窗（v1.18.77） -->
+    <div v-if="showEdit" class="modal-mask" @click.self="showEdit = false">
+      <div class="modal fm-modal" role="dialog" aria-modal="true" aria-label="编辑登记信息">
+        <div class="fm-modal-head">
+          <h3>编辑登记信息</h3>
+          <button class="icon-btn" aria-label="关闭" @click="showEdit = false">✕</button>
+        </div>
+        <label v-if="editRow && editRow.link_url" class="fm-field">
+          <span class="fm-label">链接名称</span>
+          <input v-model="editName" type="text" maxlength="255" />
+        </label>
+        <label v-else class="fm-field">
+          <span class="fm-label">文件名（已上传文件不支持改名）</span>
+          <input :value="editName" type="text" disabled title="文件名与磁盘实体绑定，不可修改" />
+        </label>
+        <label v-if="editRow && editRow.link_url" class="fm-field">
+          <span class="fm-label">链接地址（http:// 或 https:// 开头）</span>
+          <input v-model="editUrl" type="text" maxlength="1000" />
+        </label>
+        <fieldset class="fm-field fm-tiers">
+          <legend class="fm-label">可见范围（谁能查看、打开）</legend>
+          <label v-for="t in UPLOAD_TIERS" :key="t.key" class="fm-tier" :class="{ disabled: t.key === 'all_orgs' && !canPlatformAdmin }">
+            <input
+              type="radio"
+              name="fm-edit-visibility"
+              :value="t.key"
+              :disabled="t.key === 'all_orgs' && !canPlatformAdmin"
+              v-model="editVisibility"
+            />
+            <span class="fm-tier-text">
+              <b>{{ t.label }}</b>
+              <em>{{ t.desc }}</em>
+            </span>
+          </label>
+        </fieldset>
+        <label class="fm-field">
+          <span class="fm-label">备注</span>
+          <input v-model="editRemark" type="text" maxlength="500" placeholder="例如：补充说明" />
+        </label>
+        <div class="fm-modal-foot">
+          <button class="small" @click="showEdit = false">取消</button>
+          <button class="small primary" :disabled="editSubmitting" @click="doEdit">
+            {{ editSubmitting ? '保存中…' : '保存修改' }}
           </button>
         </div>
       </div>

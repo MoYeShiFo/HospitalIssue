@@ -106,6 +106,21 @@ export function createDevFileStore(filePath) {
       return { ...rec };
     },
 
+    // 局部更新（v1.18.77 编辑：可见范围/备注；链接行还可改名称与 URL）。仅改传入字段。
+    async updateFile(id, orgId, patch = {}) {
+      const records = await load();
+      const num = Number(id);
+      if (!Number.isFinite(num)) return null;
+      const rec = records.find((r) => r.id === num
+        && (orgId == null || Number(r.org_id) === Number(orgId)));
+      if (!rec) return null;
+      for (const k of ['visibility', 'remark', 'original_name', 'link_url']) {
+        if (patch[k] != null) rec[k] = patch[k];
+      }
+      await save(records);
+      return { ...rec };
+    },
+
     // 机构级联清理（删除机构时用）：返回被删记录的 stored_name 列表，调用方清理磁盘。
     async removeByOrg(orgId) {
       const records = await load();

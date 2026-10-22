@@ -308,6 +308,41 @@ async function main() {
   const lkDel = await J(`${BASE}/api/files/${lkBody.id}`, tk, { method: 'DELETE' });
   assert(lkDel.status === 200, `删除链接登记成功（HTTP ${lkDel.status}，无磁盘实体不报错）`);
 
+  // ── v1.18.77：编辑登记信息（PATCH /api/files/:id，改可见范围/备注；链接行可改名称 URL）──
+  const edUp = await U(`${BASE}/api/files`, tk, { name: '编辑测试.txt', type: 'text/plain', content: 'EDIT-ME', visibility: 'org' });
+  assert(edUp.status === 201, '上传一个用于编辑场景的文件');
+  const edByH = await fetch(`${BASE}/api/files/${edUp.body.id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${hTk}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ visibility: 'org_company' }) });
+  assert(edByH.status === 403, `无权限非本人改可见范围被拒（HTTP ${edByH.status}）`);
+  // 顺序注意：此时文件仍在 org 档（mgr 可见）→ 测非平台管理员设 all_orgs 的 403；
+  // 若先改成 org_company，mgr（医院用户）自己就看不到了，会被可见性检查先拦为 404（多机构语义正确）
+  const edAllByMgr = await fetch(`${BASE}/api/files/${edUp.body.id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${mgrTk}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ visibility: 'all_orgs' }) });
+  assert(edAllByMgr.status === 403, `非平台管理员设 all_orgs 被拒（HTTP ${edAllByMgr.status}）`);
+  const edByMgr = await fetch(`${BASE}/api/files/${edUp.body.id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${mgrTk}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ visibility: 'org_company', remark: '管理员改为公司用户可见' }) });
+  const edByMgrBody = await edByMgr.json();
+  assert(edByMgr.status === 200 && edByMgrBody.visibility === 'org_company', `有 file.delete 权限的管理员改可见范围成功（HTTP ${edByMgr.status}）`);
+  const edBad = await fetch(`${BASE}/api/files/${edUp.body.id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${tk}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ visibility: 'everyone' }) });
+  assert(edBad.status === 400, `无效档位被拒（HTTP ${edBad.status}）`);
+  const edAll = await fetch(`${BASE}/api/files/${edUp.body.id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${tk}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ visibility: 'all_orgs' }) });
+  const edAllBody = await edAll.json();
+  assert(edAll.status === 200 && edAllBody.visibility === 'all_orgs', `平台管理员设 all_orgs 成功（HTTP ${edAll.status}）`);
+  const edCross = await fetch(`${BASE}/api/files/${edUp.body.id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${o2Tk}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ visibility: 'org' }) });
+  assert(edCross.status === 404, `外机构用户编辑 all_orgs 登记被拒 404（多机构红线，实测 ${edCross.status}）`);
+  const edLink = await fetch(`${BASE}/api/files/link`, {
+    method: 'POST', headers: { Authorization: `Bearer ${tk}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: '待编辑链接', url: 'https://docs.example.com/before', visibility: 'org' }),
+  });
+  const edLinkBody = await edLink.json();
+  const edLinkUp = await fetch(`${BASE}/api/files/${edLinkBody.id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${tk}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: '已改名链接', url: 'https://docs.example.com/after', visibility: 'org_company' }) });
+  const edLinkUpBody = await edLinkUp.json();
+  assert(edLinkUp.status === 200 && edLinkUpBody.original_name === '已改名链接' && edLinkUpBody.link_url === 'https://docs.example.com/after' && edLinkUpBody.visibility === 'org_company',
+    `链接行编辑名称/URL/可见范围成功（HTTP ${edLinkUp.status}）`);
+  const edLinkBad = await fetch(`${BASE}/api/files/${edLinkBody.id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${tk}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ url: 'javascript:alert(1)' }) });
+  assert(edLinkBad.status === 400, `链接改非法 URL 被拒（HTTP ${edLinkBad.status}）`);
+  const edEmpty = await fetch(`${BASE}/api/files/${edLinkBody.id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${tk}`, 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+  assert(edEmpty.status === 400, `空修改体被拒（HTTP ${edEmpty.status}）`);
+  const edAudit = await J(`${BASE}/api/audit?pageSize=100`, tk);
+  assert(((edAudit.body && edAudit.body.rows) || []).some((a) => a.action === 'EDIT_FILE'), '审计日志包含 EDIT_FILE');
+
   // ── v1.18.74：磁盘文件丢失时预览/下载返回明确 404（不再误导为「服务器内部错误」）──
   const lostUp = await U(`${BASE}/api/files`, tk, { name: '会丢失的文件.txt', type: 'text/plain', content: 'LOST-FILE', visibility: 'org' });
   assert(lostUp.status === 201 && lostUp.body.stored_name, '上传一个用于构造磁盘丢失场景的文件');

@@ -458,6 +458,10 @@ export const api = {
     return res.json();
   },
 
+  // 编辑登记信息（v1.18.77）：改可见范围/备注；链接行还可改名称与 URL。
+  // 权限与删除一致：本人或 file.delete。
+  editFile: async (id, payload) => req(`/files/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+
   // 消息通知
   listNotifications: (params = {}) => req('/notifications' + qs(params)),
   notificationsUnreadCount: () => req('/notifications/unread-count'),
