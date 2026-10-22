@@ -235,7 +235,7 @@ function toChangeRequest(r) {
   window.dispatchEvent(new CustomEvent('ai-goto', { detail: 'changerequest' }));
 }
 
-// 详情字段中文映射（v1.18.66）：每个返回字段配中文名 + 所属分组，按角色排版；
+// 详情字段中文映射（v1.18.67）：每个返回字段配中文名 + 所属分组，按角色排版；
 // 未知字段自动归入「其他」，不丢数据。布局：上面中文标签(下方灰色英文字段名)，右边值。
 const FIELD_LABELS = {
   id: '底稿ID', index: '序号', title: '标题',
@@ -955,7 +955,7 @@ onMounted(async () => {
             <div v-if="detail.title" class="ddetail-title">{{ detail.title }}</div>
             <div v-for="g in detailGroups" :key="g.name" class="dsec">
               <div class="dsec-head">{{ g.icon }} {{ g.name }}</div>
-              <div class="dgrid" :class="{ cols1: g.full }">
+              <div class="dsec-grid" :class="{ cols1: g.full }">
                 <div v-for="it in g.items" :key="it.k" class="ditem" :class="{ full: it.full }">
                   <span class="dl">{{ it.label }}<i>{{ it.k }}</i></span>
                   <span class="dv">{{ it.v }}</span>
@@ -1178,8 +1178,8 @@ thead th.op { z-index: 3; background: #f4f6f9; }
 .ddetail-title { font-size: 14px; font-weight: 700; color: #1f2d3d; line-height: 1.45; margin-bottom: 12px; }
 .dsec { flex: none; border: 1px solid #e3e8f0; border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
 .dsec-head { background: #f5f7fa; padding: 7px 12px; font-size: 12.5px; font-weight: 700; color: #334155; border-bottom: 1px solid #e9edf3; }
-.dgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 18px; padding: 10px 12px; }
-.dgrid.cols1 { grid-template-columns: 1fr; }
+.dsec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 18px; padding: 10px 12px; }
+.dsec-grid.cols1 { grid-template-columns: 1fr; }
 .ditem { display: flex; align-items: flex-start; gap: 10px; padding: 5px 0; border-bottom: 1px dashed #f0f3f7; font-size: 12.5px; }
 .ditem:last-child { border-bottom: none; }
 .ditem.full { grid-column: 1 / -1; }
