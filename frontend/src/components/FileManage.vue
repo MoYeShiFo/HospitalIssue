@@ -1,8 +1,10 @@
 <script setup>
 // 文件管理（v1.18.70）：上传 / 三档可见范围列表 / 在线预览 / 下载 / 删除。
 // 可见范围由后端按 org_id + user_type 服务端强制判定，前端 tab 只是快捷筛选（与后端同参数）。
-// 预览白名单与后端 previewTypeOf 保持一致：白名单外（HTML/SVG/Office 等）不提供预览，直接下载。
-import { ref, onMounted, onBeforeUnmount } from 'vue';
+// 预览渲染器分派（v1.18.73）：image/pdf/音视频由浏览器原生渲染；文本/HTML 源码展示；
+// Office 由前端纯 JS 库本地解析（xlsx / docx-preview / jszip），离线可用、零新增后端依赖。
+// PREVIEW_KIND 与后端 routes/files.js 的 EXT_TYPE 逐字同步（红线），任一端扩表须两端同步。
+import { ref, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { api } from '../api.js';
 
 const props = defineProps({
@@ -25,7 +27,46 @@ const UPLOAD_TIERS = [
   { key: 'org_company', label: '公司用户', desc: '仅本机构公司用户可查看' },
   { key: 'all_orgs', label: '全机构共享', desc: '所有机构用户均可查看、下载（仅平台管理员）' },
 ];
-const PREVIEW_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.pdf', '.txt', '.md', '.csv', '.json', '.log']);
+// 预览类型分派表（v1.18.73）：扩展名 → 渲染种类；与后端 routes/files.js 的 EXT_TYPE 逐字同步（红线）。
+const PREVIEW_KIND = {
+  image: ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg', '.ico'],
+  pdf: ['.pdf'],
+  text: ['.txt', '.md', '.csv', '.json', '.log', '.xml', '.yml', '.yaml', '.html', '.htm',
+    '.js', '.ts', '.py', '.java', '.c', '.cpp', '.h', '.sql', '.sh', '.bat', '.ini', '.conf', '.css'],
+  excel: ['.xlsx', '.xls'],
+  word: ['.docx'],
+  ppt: ['.pptx'],
+  video: ['.mp4', '.webm', '.mov'],
+  audio: ['.mp3', '.wav', '.ogg', '.m4a'],
+};
+function kindOf(name) {
+  const e = extOf(name);
+  for (const k of Object.keys(PREVIEW_KIND)) {
+    if (PREVIEW_KIND[k].includes(e)) return k;
+  }
+  return null;
+}
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+// pptx 大纲抽取（jszip 读 ppt/slides/slideN.xml 的 <a:t> 文本，纯前端、离线可用）
+async function extractPptText(blob) {
+  const jszipNs = await import('jszip');
+  const JSZip = (jszipNs.default && jszipNs.default.loadAsync) ? jszipNs.default : jszipNs;
+  const zip = await JSZip.loadAsync(blob);
+  const slides = Object.keys(zip.files)
+    .filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n))
+    .sort((a, b) => Number(a.match(/\d+/)) - Number(b.match(/\d+/)));
+  const parts = [];
+  for (const s of slides) {
+    const xml = await zip.files[s].async('string');
+    const txt = (xml.match(/<a:t>([\s\S]*?)<\/a:t>/g) || [])
+      .map((m) => m.replace(/<a:t>/, '').replace(/<\/a:t>/, ''))
+      .join('\n');
+    parts.push(`【幻灯片 ${parts.length + 1}】\n${txt.trim() || '（无文本）'}`);
+  }
+  return parts.join('\n\n');
+}
 const MAX_SIZE = 20 * 1024 * 1024; // 与后端 multer 限制一致
 
 const rows = ref([]);
@@ -46,7 +87,8 @@ const upRemark = ref('');
 const upSubmitting = ref(false);
 
 // 预览弹窗
-const preview = ref(null); // { name, kind: 'image'|'pdf'|'text', url, text }
+const preview = ref(null); // { name, kind, url, text, html } —— kind ∈ image|pdf|text|excel|word|ppt|video|audio
+const wordBox = ref(null); // docx-preview 渲染容器（kind==='word' 时挂载）
 
 // 删除确认
 const deleteTarget = ref(null);
@@ -115,7 +157,8 @@ function extOf(name) {
   const m = String(name || '').toLowerCase().match(/(\.[a-z0-9]+)$/);
   return m ? m[1] : '';
 }
-function canPreview(name) { return PREVIEW_EXT.has(extOf(name)); }
+// 是否可站内预览：凡 PREVIEW_KIND 已登记分派渲染器的类型均可预览（v1.18.73 覆盖 Office/音视频等全类型）
+function canPreview(name) { return kindOf(name) != null; }
 function isImageExt(ext) { return ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'].includes(ext); }
 
 // ── 上传 ──
@@ -153,22 +196,50 @@ async function doUpload() {
 }
 
 // ── 预览 / 下载 ──
+// 按扩展名分派渲染器（v1.18.73）：浏览器原生能力（image/pdf/video/audio）→ objectURL；
+// 文本/HTML 源码 → blob.text() 经 <pre> 展示（Vue 插值自动转义，不执行）；
+// Excel → SheetJS 解析为 HTML 表格；Word → docx-preview 渲染；PPT → jszip 抽取大纲文本。
 async function openPreview(row) {
-  if (!canPreview(row.original_name)) {
-    // 白名单外（HTML/SVG/Office 等）：不站内渲染，直接下载（与后端 302 防线一致）
+  const kind = kindOf(row.original_name);
+  if (!kind) {
+    // 无预览意义的类型（exe/zip 等）：直接走强制下载（与后端 302 防线一致）
     download(row);
     return;
   }
   try {
     const blob = await api.fetchFileBlob(row.id);
-    const ext = extOf(row.original_name);
-    preview.value = {
-      name: row.original_name,
-      kind: ext === '.pdf' ? 'pdf' : (isImageExt(ext) ? 'image' : 'text'),
-      url: URL.createObjectURL(blob),
-      text: '',
-    };
-    if (preview.value.kind === 'text') preview.value.text = await blob.text();
+    if (kind === 'image' || kind === 'pdf' || kind === 'video' || kind === 'audio') {
+      preview.value = { name: row.original_name, kind, url: URL.createObjectURL(blob), text: '', html: '' };
+      return;
+    }
+    if (kind === 'text') {
+      preview.value = { name: row.original_name, kind, url: null, text: await blob.text(), html: '' };
+      return;
+    }
+    if (kind === 'excel') {
+      // 兼容 dev（esbuild 给 CJS 包挂 .default）与生产构建（Rollup 把 read/utils 作为命名导出）两种 interop
+      const xlsxNs = await import('xlsx');
+      const XLSX = (xlsxNs.default && xlsxNs.default.read) ? xlsxNs.default : xlsxNs;
+      const wb = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
+      const html = wb.SheetNames.map((name) => {
+        const tbl = XLSX.utils.sheet_to_html(wb.Sheets[name], { id: undefined });
+        return `<div class="fm-xls-sheet"><div class="fm-xls-name">${escapeHtml(name)}</div>${tbl}</div>`;
+      }).join('');
+      preview.value = { name: row.original_name, kind, url: null, text: '', html };
+      return;
+    }
+    if (kind === 'word') {
+      preview.value = { name: row.original_name, kind, url: null, text: '', html: '' };
+      await nextTick();
+      const docxNs = await import('docx-preview');
+      const renderAsync = (docxNs.default && typeof docxNs.default === 'function') ? docxNs.default : (docxNs.renderAsync || docxNs.default);
+      if (wordBox.value && renderAsync) await renderAsync(blob, wordBox.value, null, { className: 'fm-docx', inWrapper: true });
+      return;
+    }
+    if (kind === 'ppt') {
+      preview.value = { name: row.original_name, kind, url: null, text: await extractPptText(blob), html: '' };
+      return;
+    }
   } catch (e) {
     showToast(e.message || '预览失败', 'error');
   }
@@ -270,7 +341,7 @@ onBeforeUnmount(() => {
               <button
                 class="small"
                 :disabled="!canPreview(r.original_name)"
-                :title="canPreview(r.original_name) ? '在线预览' : '该类型需下载后查看'"
+                :title="canPreview(r.original_name) ? '' : '该类型不支持在线预览，请下载后查看'"
                 @click="openPreview(r)"
               >预览</button>
               <button class="small" @click="download(r)">下载</button>
@@ -345,7 +416,11 @@ onBeforeUnmount(() => {
         <div class="fm-preview-body">
           <img v-if="preview.kind === 'image'" :src="preview.url" :alt="preview.name" />
           <iframe v-else-if="preview.kind === 'pdf'" :src="preview.url" :title="preview.name"></iframe>
-          <pre v-else>{{ preview.text }}</pre>
+          <pre v-else-if="preview.kind === 'text' || preview.kind === 'ppt'" class="fm-pre">{{ preview.text }}</pre>
+          <div v-else-if="preview.kind === 'excel'" class="fm-xls" v-html="preview.html"></div>
+          <div v-else-if="preview.kind === 'word'" ref="wordBox" class="fm-docx-wrap"></div>
+          <video v-else-if="preview.kind === 'video'" :src="preview.url" :title="preview.name" controls class="fm-media"></video>
+          <audio v-else-if="preview.kind === 'audio'" :src="preview.url" :title="preview.name" controls class="fm-media"></audio>
         </div>
         <div class="fm-modal-foot">
           <button class="small" @click="closePreview">关闭</button>
@@ -471,6 +546,18 @@ html[data-theme="dark"] .fm-tab.active .fm-tab-count { color: color-mix(in srgb,
   white-space: pre-wrap; word-break: break-all; color: var(--text);
   font-family: var(--font-mono, ui-monospace, monospace);
 }
+/* 文本 / PPT 大纲（Vue 插值已转义，展示源码/文本，不执行） */
+.fm-preview-body .fm-pre { margin: 0; }
+/* Excel 渲染（SheetJS → HTML 表格） */
+.fm-xls { padding: 12px; overflow: auto; }
+.fm-xls table { border-collapse: collapse; font-size: 12.5px; color: var(--text); }
+.fm-xls td, .fm-xls th { border: 1px solid var(--border-strong); padding: 4px 8px; }
+.fm-xls .fm-xls-name { font-weight: 600; margin: 6px 0 4px; font-size: 12.5px; color: var(--muted); }
+/* Word 渲染容器（docx-preview 注入） */
+.fm-docx-wrap { padding: 16px; background: #fff; min-height: 200px; }
+.fm-docx-wrap .fm-docx { background: #fff; }
+/* 音视频 */
+.fm-preview-body .fm-media { display: block; max-width: 100%; margin: 10px auto; }
 .fm-del-text { margin: 12px 0 0; font-size: 13.5px; color: var(--text); }
 
 /* toast（与 Audited.vue 同款） */
