@@ -216,7 +216,10 @@ try {
   // v1.18.73：全类型预览（Office / 音视频 / 更多文本）渲染容器类名与版本号必须真的编进产物
   assert(jsText.includes('fm-xls') && jsText.includes('fm-docx-wrap') && jsText.includes('fm-media'),
     'JS 产物含全类型预览渲染容器类名（fm-xls / fm-docx-wrap / fm-media，v1.18.73）');
-  assert(jsText.includes('v1.18.75'), 'JS 产物含版本号 v1.18.75（来自 src/version.js，v1.18.73 全类型预览 + v1.18.74/75 文件读写修复）');
+  assert(jsText.includes('v1.18.76'), 'JS 产物含版本号 v1.18.76（来自 src/version.js，v1.18.73 全类型预览 + v1.18.74/75 修复 + v1.18.76 在线链接）');
+  // v1.18.76：在线文档链接入口与链接行样式必须真的编进产物
+  assert(jsText.includes('添加链接'), 'JS 产物含「添加链接」入口（v1.18.76）');
+  assert(jsText.includes('fm-link-name') && cssText.includes('.fm-link-name'), '产物含链接行样式类（JS 模板字面量 + CSS 规则 .fm-link-name，v1.18.76）');
   // v1.18.28: 数据驾驶舱「平均处理时长」改按工作日 8 小时折算 —— 口径提示文案必须真的编进产物
   assert(jsText.includes('按工作日 8 小时折算'), 'JS 产物含平均处理时长「按工作日 8 小时折算」口径提示');
   // v1.18.29：聊天「新建会话」选成员列表按类型分二级 sheet 页 —— 「院方用户/公司用户」标签与

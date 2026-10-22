@@ -124,6 +124,50 @@ router.post('/', authenticate, requirePermission('file.upload'), upload.single('
   }
 });
 
+// 添加在线文档链接（v1.18.76）：与上传同权限模型（file.upload；all_orgs 仅平台管理员）。
+// 仅登记 URL（http/https），不落磁盘实体；列表内与其他文件同口径按可见范围过滤。
+router.post('/link', authenticate, requirePermission('file.upload'), async (req, res) => {
+  try {
+    const name = String(req.body.name || '').trim();
+    const url = String(req.body.url || '').trim();
+    const visibility = String(req.body.visibility || 'org');
+    if (!name) return res.status(400).json({ error: '请填写链接名称' });
+    if (name.length > 255) return res.status(400).json({ error: '链接名称过长（上限 255 字）' });
+    if (!/^https?:\/\/\S+$/i.test(url)) return res.status(400).json({ error: '链接格式无效，需以 http:// 或 https:// 开头' });
+    if (url.length > 1000) return res.status(400).json({ error: '链接过长（上限 1000 字符）' });
+    if (!VISIBILITY_LIST.includes(visibility)) {
+      return res.status(400).json({ error: '无效的可见范围' });
+    }
+    if (visibility === 'all_orgs' && !(await isPlatformAdmin(req))) {
+      return res.status(403).json({ error: '「全机构共享」仅平台管理员可选' });
+    }
+    const remark = String(req.body.remark || '').slice(0, 500);
+    const store = await getFileStore();
+    const rec = await store.createFile({
+      org_id: req.orgId,
+      visibility,
+      original_name: name,
+      stored_name: '',
+      size: 0,
+      mime: 'web/link',
+      remark,
+      uploaded_by: req.user.username,
+      uploader_name: req.user.name || req.user.username,
+      link_url: url,
+      created_at: new Date().toISOString(),
+    });
+    await audit({
+      username: req.user.username,
+      action: 'ADD_FILE_LINK',
+      target: name,
+      detail: `可见范围：${visibility}`,
+    });
+    res.status(201).json(rec);
+  } catch (e) {
+    send500(res, e);
+  }
+});
+
 // 列表 + 分档计数：q（文件名/备注/上传人模糊）、scope（档位 tab）、page、pageSize。
 // 可见性过滤在存储层完成（与 visibility.js 等价）；counts 为可见集合内匹配 q 的各档条数。
 // mine：是否本人上传（删除按钮显隐用「本人或 file.delete 权限」，服务端计算，前端不自行比对）。
@@ -234,9 +278,12 @@ router.delete('/:id', authenticate, async (req, res) => {
     }
     const removed = await found.store.deleteFile(req.params.id, found.rec.org_id);
     if (!removed) return res.status(404).json({ error: '文件不存在或已被删除' });
-    try {
-      await removeStoredFiles([{ storedName: removed.stored_name }]);
-    } catch { /* 磁盘文件不存在等情况直接忽略 */ }
+    // 链接类登记（v1.18.76）无磁盘实体，仅当有 stored_name 时才清理磁盘
+    if (removed.stored_name) {
+      try {
+        await removeStoredFiles([{ storedName: removed.stored_name }]);
+      } catch { /* 磁盘文件不存在等情况直接忽略 */ }
+    }
     await audit({
       username: req.user.username,
       action: 'DELETE_FILE',

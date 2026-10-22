@@ -282,6 +282,32 @@ async function main() {
   assert(auditRows.some((a) => a.action === 'UPLOAD_FILE'), '审计日志包含 UPLOAD_FILE');
   assert(auditRows.some((a) => a.action === 'DELETE_FILE'), '审计日志包含 DELETE_FILE');
 
+  // ── v1.18.76：在线文档链接（POST /api/files/link）──
+  const lkUp = await fetch(`${BASE}/api/files/link`, {
+    method: 'POST', headers: { Authorization: `Bearer ${tk}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: '第三季度通报（在线文档）', url: 'https://docs.example.com/report', visibility: 'org', remark: '链接登记' }),
+  });
+  const lkBody = await lkUp.json();
+  assert(lkUp.status === 201 && lkBody.link_url === 'https://docs.example.com/report' && lkBody.mime === 'web/link' && Number(lkBody.size) === 0,
+    `添加在线文档链接成功（HTTP ${lkUp.status}，link_url/mime=web/link/size=0）`);
+  const lkBad = await fetch(`${BASE}/api/files/link`, {
+    method: 'POST', headers: { Authorization: `Bearer ${tk}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: '坏链接', url: 'ftp://not-http', visibility: 'org' }),
+  });
+  assert(lkBad.status === 400, `非 http/https 链接被拒（HTTP ${lkBad.status}）`);
+  const lkAll = await fetch(`${BASE}/api/files/link`, {
+    method: 'POST', headers: { Authorization: `Bearer ${hTk}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: '登记员越权链接', url: 'https://docs.example.com/x', visibility: 'all_orgs' }),
+  });
+  assert(lkAll.status === 403, `非平台管理员加 all_orgs 链接被拒（HTTP ${lkAll.status}）`);
+  const lkList = await J(`${BASE}/api/files?q=${encodeURIComponent('在线文档')}`, tk);
+  assert((lkList.body.rows || []).some((r) => r.original_name === '第三季度通报（在线文档）' && r.link_url),
+    '链接登记出现在列表且带 link_url');
+  const lkCross = await J(`${BASE}/api/files/${lkBody.id}`, o2Tk);
+  assert(lkCross.status === 404, `外机构用户读链接登记 → 404（多机构红线，实测 ${lkCross.status}）`);
+  const lkDel = await J(`${BASE}/api/files/${lkBody.id}`, tk, { method: 'DELETE' });
+  assert(lkDel.status === 200, `删除链接登记成功（HTTP ${lkDel.status}，无磁盘实体不报错）`);
+
   // ── v1.18.74：磁盘文件丢失时预览/下载返回明确 404（不再误导为「服务器内部错误」）──
   const lostUp = await U(`${BASE}/api/files`, tk, { name: '会丢失的文件.txt', type: 'text/plain', content: 'LOST-FILE', visibility: 'org' });
   assert(lostUp.status === 201 && lostUp.body.stored_name, '上传一个用于构造磁盘丢失场景的文件');
