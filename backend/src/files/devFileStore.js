@@ -41,6 +41,7 @@ export function createDevFileStore(filePath) {
       uploaded_by: rec.uploaded_by || '',
       uploader_name: rec.uploader_name || '',
       link_url: rec.link_url || '',
+      category: rec.category || '',
       created_at: rec.created_at || new Date().toISOString(),
     };
   }
@@ -52,9 +53,10 @@ export function createDevFileStore(filePath) {
   return {
     async init() { await load(); },
 
-    // 列表：先按可见性规则过滤（visibility.js），再应用搜索词与档位 tab，分页 + 分档计数。
+    // 列表：先按可见性规则过滤（visibility.js），再应用搜索词、分类与档位 tab，分页 + 分档计数。
     // counts 口径 = 可见集合内匹配搜索词、忽略 scope 的各档条数（搜索时计数同步变化）。
-    async listFiles({ q, scope, page = 1, pageSize = 20, orgId, user } = {}) {
+    // v1.18.79：cat 过滤 + catCounts（可见集合内各分类条数，忽略 cat 与 scope）。
+    async listFiles({ q, scope, cat, page = 1, pageSize = 20, orgId, user } = {}) {
       const records = await load();
       let visible = records.filter((r) => canSeeFile(r, user, orgId));
       if (q) {
@@ -62,6 +64,10 @@ export function createDevFileStore(filePath) {
         visible = visible.filter((r) =>
           [r.original_name, r.remark, r.uploader_name].join(' ').toLowerCase().includes(k));
       }
+      const catCounts = {};
+      for (const r of visible) catCounts[r.category || ''] = (catCounts[r.category || ''] || 0) + 1;
+      // '__none__' 哨兵 = 未分类（category 为空串），与「全部」('') 区分
+      if (cat) visible = visible.filter((r) => (r.category || '') === (cat === '__none__' ? '' : cat));
       const counts = { all: visible.length, all_orgs: 0, org: 0, org_company: 0 };
       for (const r of visible) {
         if (counts[r.visibility] != null) counts[r.visibility] += 1;
@@ -71,7 +77,7 @@ export function createDevFileStore(filePath) {
       const total = sorted.length;
       const start = (Number(page) - 1) * Number(pageSize);
       const rows = sorted.slice(start, start + Number(pageSize)).map((r) => ({ ...r }));
-      return { rows, total, counts, page: Number(page), pageSize: Number(pageSize) };
+      return { rows, total, counts, catCounts, page: Number(page), pageSize: Number(pageSize) };
     },
 
     // 按 id 取原始记录（仅限当前机构；跨机构一律视为不存在 —— 多机构红线）。
@@ -114,7 +120,7 @@ export function createDevFileStore(filePath) {
       const rec = records.find((r) => r.id === num
         && (orgId == null || Number(r.org_id) === Number(orgId)));
       if (!rec) return null;
-      for (const k of ['visibility', 'remark', 'original_name', 'link_url']) {
+      for (const k of ['visibility', 'remark', 'original_name', 'link_url', 'category']) {
         if (patch[k] != null) rec[k] = patch[k];
       }
       await save(records);

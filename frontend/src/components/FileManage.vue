@@ -76,6 +76,10 @@ const page = ref(1);
 const pageSize = ref(10);
 const keyword = ref('');
 const scope = ref('');
+// 分类筛选（v1.18.79）：'' = 全部分类；分类表由列表接口下发（categories/catCounts）
+const cat = ref('');
+const categories = ref([]);
+const catCounts = ref({});
 const loading = ref(false);
 const error = ref('');
 
@@ -84,6 +88,7 @@ const showUpload = ref(false);
 const upFile = ref(null);
 const upVisibility = ref('org');
 const upRemark = ref('');
+const upCategory = ref('');
 const upSubmitting = ref(false);
 
 // 添加在线文档链接弹窗（v1.18.76）
@@ -92,6 +97,7 @@ const linkName = ref('');
 const linkUrl = ref('');
 const linkVisibility = ref('org');
 const linkRemark = ref('');
+const linkCategory = ref('');
 const linkSubmitting = ref(false);
 
 // 预览弹窗
@@ -124,12 +130,15 @@ async function load() {
     const r = await api.listFiles({
       q: keyword.value || undefined,
       scope: scope.value || undefined,
+      cat: cat.value || undefined,
       page: page.value,
       pageSize: pageSize.value,
     });
     rows.value = r.rows || [];
     total.value = r.total || 0;
     counts.value = r.counts || { all: 0, all_orgs: 0, org: 0, org_company: 0 };
+    categories.value = r.categories || [];
+    catCounts.value = r.catCounts || {};
   } catch (e) {
     error.value = e.message || '加载失败，请稍后重试';
     rows.value = [];
@@ -174,6 +183,7 @@ function openUpload() {
   upFile.value = null;
   upVisibility.value = 'org';
   upRemark.value = '';
+  upCategory.value = '';
   showUpload.value = true;
 }
 function onFilePick(e) {
@@ -191,7 +201,7 @@ async function doUpload() {
   if (!upFile.value) { showToast('请先选择文件', 'error'); return; }
   upSubmitting.value = true;
   try {
-    await api.uploadFile(upFile.value, upVisibility.value, upRemark.value.trim());
+    await api.uploadFile(upFile.value, upVisibility.value, upRemark.value.trim(), upCategory.value);
     showUpload.value = false;
     showToast('上传成功');
     page.value = 1;
@@ -209,6 +219,7 @@ function openAddLink() {
   linkUrl.value = '';
   linkVisibility.value = 'org';
   linkRemark.value = '';
+  linkCategory.value = '';
   showLink.value = true;
 }
 async function doAddLink() {
@@ -216,7 +227,7 @@ async function doAddLink() {
   if (!/^https?:\/\/\S+$/i.test(linkUrl.value.trim())) { showToast('链接需以 http:// 或 https:// 开头', 'error'); return; }
   linkSubmitting.value = true;
   try {
-    await api.addFileLink(linkName.value.trim(), linkUrl.value.trim(), linkVisibility.value, linkRemark.value.trim());
+    await api.addFileLink(linkName.value.trim(), linkUrl.value.trim(), linkVisibility.value, linkRemark.value.trim(), linkCategory.value);
     showLink.value = false;
     showToast('链接已添加');
     page.value = 1;
@@ -238,6 +249,7 @@ const editName = ref('');
 const editUrl = ref('');
 const editVisibility = ref('org');
 const editRemark = ref('');
+const editCategory = ref('');
 const editSubmitting = ref(false);
 function openEdit(r) {
   editRow.value = r;
@@ -245,12 +257,13 @@ function openEdit(r) {
   editUrl.value = r.link_url || '';
   editVisibility.value = r.visibility;
   editRemark.value = r.remark || '';
+  editCategory.value = r.category || '';
   showEdit.value = true;
 }
 async function doEdit() {
   const r = editRow.value;
   if (!r) return;
-  const payload = { visibility: editVisibility.value, remark: editRemark.value.trim() };
+  const payload = { visibility: editVisibility.value, remark: editRemark.value.trim(), category: editCategory.value };
   if (r.link_url) {
     if (!editName.value.trim()) { showToast('链接名称不能为空', 'error'); return; }
     if (!/^https?:\/\/\S+$/i.test(editUrl.value.trim())) { showToast('链接需以 http:// 或 https:// 开头', 'error'); return; }
@@ -378,6 +391,11 @@ onBeforeUnmount(() => {
         placeholder="搜索文件名 / 备注 / 上传人"
         @input="onKeywordInput"
       />
+      <select v-model="cat" class="fm-cat-select" aria-label="按分类筛选" @change="page = 1; load()">
+        <option value="">全部分类</option>
+        <option v-for="c in categories" :key="c" :value="c">{{ c }}（{{ catCounts[c] || 0 }}）</option>
+        <option v-if="catCounts['']" value="__none__">未分类（{{ catCounts[''] || 0 }}）</option>
+      </select>
       <nav class="fm-tabs" aria-label="按可见范围分类">
         <button
           v-for="s in SCOPES"
@@ -399,6 +417,7 @@ onBeforeUnmount(() => {
         <thead>
           <tr>
             <th style="min-width:220px">文件名</th>
+            <th>分类</th>
             <th>可见范围</th>
             <th>大小</th>
             <th>上传者</th>
@@ -413,6 +432,7 @@ onBeforeUnmount(() => {
               <template v-if="r.link_url"><span class="fm-link-name">🔗 {{ r.original_name }}</span></template>
               <template v-else>{{ r.original_name }}</template>
             </td>
+            <td><span class="fm-cat" :class="{ 'fm-cat-none': !r.category }">{{ r.category || '未分类' }}</span></td>
             <td><span class="fm-badge" :class="'fm-badge-' + r.visibility">{{ VIS_LABEL[r.visibility] || r.visibility }}</span></td>
             <td class="fm-muted">{{ r.link_url ? '—' : fmtSize(r.size) }}</td>
             <td class="fm-muted">{{ r.uploader_name || r.uploaded_by }}</td>
@@ -481,6 +501,13 @@ onBeforeUnmount(() => {
           </label>
         </fieldset>
         <label class="fm-field">
+          <span class="fm-label">分类</span>
+          <select v-model="upCategory" class="fm-cat-select">
+            <option value="">未分类</option>
+            <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
+          </select>
+        </label>
+        <label class="fm-field">
           <span class="fm-label">备注（选填，便于他人检索）</span>
           <input v-model="upRemark" type="text" maxlength="500" placeholder="例如：2026 年第三季度运维通报" />
         </label>
@@ -524,6 +551,13 @@ onBeforeUnmount(() => {
             </span>
           </label>
         </fieldset>
+        <label class="fm-field">
+          <span class="fm-label">分类</span>
+          <select v-model="linkCategory" class="fm-cat-select">
+            <option value="">未分类</option>
+            <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
+          </select>
+        </label>
         <label class="fm-field">
           <span class="fm-label">备注（选填，便于他人检索）</span>
           <input v-model="linkRemark" type="text" maxlength="500" placeholder="例如：请各科室填写后提交" />
@@ -572,6 +606,13 @@ onBeforeUnmount(() => {
             </span>
           </label>
         </fieldset>
+        <label class="fm-field">
+          <span class="fm-label">分类</span>
+          <select v-model="editCategory" class="fm-cat-select">
+            <option value="">未分类</option>
+            <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
+          </select>
+        </label>
         <label class="fm-field">
           <span class="fm-label">备注</span>
           <input v-model="editRemark" type="text" maxlength="500" placeholder="例如：补充说明" />
@@ -667,6 +708,10 @@ onBeforeUnmount(() => {
 .fm-head-btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .fm-link-name { color: var(--primary); cursor: pointer; }
 .fm-tr:hover .fm-link-name { text-decoration: underline; }
+/* 分类筛选与分类列（v1.18.79） */
+.fm-cat-select { padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); color: var(--text); font-size: 13px; }
+.fm-cat { font-size: 12.5px; }
+.fm-cat-none { color: var(--muted); }
 .fm-muted { color: var(--muted); font-size: 12.5px; }
 .fm-remark { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

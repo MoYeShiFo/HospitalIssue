@@ -216,7 +216,10 @@ try {
   // v1.18.73：全类型预览（Office / 音视频 / 更多文本）渲染容器类名与版本号必须真的编进产物
   assert(jsText.includes('fm-xls') && jsText.includes('fm-docx-wrap') && jsText.includes('fm-media'),
     'JS 产物含全类型预览渲染容器类名（fm-xls / fm-docx-wrap / fm-media，v1.18.73）');
-  assert(jsText.includes('v1.18.78'), 'JS 产物含版本号 v1.18.78（来自 src/version.js，v1.18.77 编辑可见范围 + v1.18.78 修 UPDATE OUTPUT 子句顺序）');
+  assert(jsText.includes('v1.18.79'), 'JS 产物含版本号 v1.18.79（来自 src/version.js，v1.18.78 修复 + v1.18.79 文件分类）');
+  // v1.18.79：分类筛选与分类列必须真的编进产物（只钉字符串字面量/CSS 规则，函数名会被压缩）
+  assert(jsText.includes('全部分类') && jsText.includes('未分类'), 'JS 产物含分类筛选选项文案（v1.18.79）');
+  assert(cssText.includes('.fm-cat-select') && cssText.includes('.fm-cat-none'), 'CSS 产物含分类下拉与未分类样式（v1.18.79）');
   // v1.18.77：编辑登记信息入口必须真的编进产物（只钉字符串字面量，函数名会被压缩）
   assert(jsText.includes('编辑登记信息') && jsText.includes('保存修改'), 'JS 产物含编辑弹窗标题与保存按钮文案（v1.18.77）');
   // v1.18.76：在线文档链接入口与链接行样式必须真的编进产物

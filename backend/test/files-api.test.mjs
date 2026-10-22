@@ -73,11 +73,12 @@ const J = async (url, token, opts = {}) => {
   return { status: r.status, body, headers: r.headers };
 };
 // multipart 上传（字段名 file，与路由 upload.single('file') 一致）
-const U = async (url, token, { name, type, content, visibility, remark }) => {
+const U = async (url, token, { name, type, content, visibility, remark, category }) => {
   const fd = new FormData();
   fd.append('file', new Blob([content], { type }), name);
   if (visibility) fd.append('visibility', visibility);
   if (remark != null) fd.append('remark', remark);
+  if (category != null) fd.append('category', category);
   const r = await fetch(url, {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -342,6 +343,31 @@ async function main() {
   assert(edEmpty.status === 400, `空修改体被拒（HTTP ${edEmpty.status}）`);
   const edAudit = await J(`${BASE}/api/audit?pageSize=100`, tk);
   assert(((edAudit.body && edAudit.body.rows) || []).some((a) => a.action === 'EDIT_FILE'), '审计日志包含 EDIT_FILE');
+
+  // ── v1.18.79：文件分类（category 字段 + cat 过滤 + catCounts）──
+  const catUp = await U(`${BASE}/api/files`, tk, { name: '分类测试.txt', type: 'text/plain', content: 'CAT', visibility: 'org', category: '运维' });
+  assert(catUp.status === 201 && catUp.body.category === '运维', `上传带分类成功（HTTP ${catUp.status}，category=运维）`);
+  const catBad = await U(`${BASE}/api/files`, tk, { name: '坏分类.txt', type: 'text/plain', content: 'X', visibility: 'org', category: '不存在的分类' });
+  assert(catBad.status === 400, `非法分类被拒（HTTP ${catBad.status}）`);
+  const catLink = await fetch(`${BASE}/api/files/link`, {
+    method: 'POST', headers: { Authorization: `Bearer ${tk}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: '分类测试链接', url: 'https://docs.example.com/cat', visibility: 'org', category: '项目过程管理' }),
+  });
+  const catLinkBody = await catLink.json();
+  assert(catLink.status === 201 && catLinkBody.category === '项目过程管理', `链接带分类成功（HTTP ${catLink.status}）`);
+  const catList = await J(`${BASE}/api/files?cat=${encodeURIComponent('运维')}`, tk);
+  assert(catList.status === 200 && (catList.body.rows || []).length >= 1 && (catList.body.rows || []).every((r) => r.category === '运维'),
+    `cat=运维 过滤仅返回该分类（实测 ${((catList.body || {}).rows || []).length} 条）`);
+  assert(Array.isArray(catList.body.categories) && catList.body.categories.includes('项目过程管理') && catList.body.categories.includes('运维'),
+    '列表下发预定义分类表 categories');
+  assert(catList.body.catCounts && typeof catList.body.catCounts === 'object', '列表下发 catCounts 分类计数');
+  const catNone = await J(`${BASE}/api/files?cat=__none__`, tk);
+  assert(catNone.status === 200 && (catNone.body.rows || []).every((r) => !r.category), `cat=__none__ 过滤仅返回未分类（实测 ${((catNone.body || {}).rows || []).length} 条）`);
+  const catEdit = await fetch(`${BASE}/api/files/${catUp.body.id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${tk}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ category: '项目过程管理' }) });
+  const catEditBody = await catEdit.json();
+  assert(catEdit.status === 200 && catEditBody.category === '项目过程管理', `PATCH 修改分类成功（HTTP ${catEdit.status}，body=${JSON.stringify({ category: catEditBody.category, error: catEditBody.error })}）`);
+  const catEditBad = await fetch(`${BASE}/api/files/${catUp.body.id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${tk}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ category: '野分类' }) });
+  assert(catEditBad.status === 400, `PATCH 非法分类被拒（HTTP ${catEditBad.status}）`);
 
   // ── v1.18.74：磁盘文件丢失时预览/下载返回明确 404（不再误导为「服务器内部错误」）──
   const lostUp = await U(`${BASE}/api/files`, tk, { name: '会丢失的文件.txt', type: 'text/plain', content: 'LOST-FILE', visibility: 'org' });
