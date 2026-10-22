@@ -216,8 +216,16 @@ BEGIN
         code        NVARCHAR(50)  NOT NULL UNIQUE,   -- 机构编码（唯一，用于配置/对接）
         name        NVARCHAR(100) NOT NULL,          -- 机构名称（界面展示）
         active      BIT NOT NULL DEFAULT 1,          -- 停用后其成员不可再切进去
+        project_manager BIGINT NULL,                 -- 项目经理（v1.18.81）：公司用户 user_id，可空
         created_at  DATETIME NOT NULL DEFAULT GETDATE()
     );
+END
+GO
+
+-- 9.1b) 项目经理列平滑加列（v1.18.81，老库升级用；新库上句已含）
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.app_org') AND name = N'project_manager')
+BEGIN
+    ALTER TABLE dbo.app_org ADD project_manager BIGINT NULL;
 END
 GO
 
