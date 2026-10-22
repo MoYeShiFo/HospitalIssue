@@ -3,6 +3,7 @@ import path from 'node:path';
 import { sortRows } from './sort.js';
 import { computeDashboard } from './aggregate.js';
 import { filterByOrg, inOrg, DEFAULT_ORG_ID } from './orgScope.js';
+import { viewerMatches } from './problemScope.js';
 
 function groupCount(rows, key) {
   const m = {};
@@ -91,10 +92,12 @@ export function createDevRepo(filePath) {
   return {
     async init() { await load(); },
 
-    async list({ status, type, department, keyword, auditStatus, deleted, page = 1, pageSize = 20, sort, order, orgId } = {}) {
+    async list({ status, type, department, keyword, auditStatus, deleted, page = 1, pageSize = 20, sort, order, orgId, viewer } = {}) {
       const rows = await load();
       // 机构隔离（v1.18）→ 软删除过滤：默认仅未删除记录；deleted=true 时仅回收站记录
-      const scoped = filterByOrg(rows, orgId);
+      let scoped = filterByOrg(rows, orgId);
+      // 角色可见范围（v1.18.80）：登记员只看自己登记的；公司用户看处理人/登记人是自己的
+      if (viewer) scoped = scoped.filter((r) => viewerMatches(r, viewer));
       const filtered = applyFilters(filterByDeleted(scoped, deleted), { status, type, department, keyword, auditStatus });
       const sorted = sortRows(filtered, sort, order);
       const total = sorted.length;
@@ -124,10 +127,11 @@ export function createDevRepo(filePath) {
       return { rows: paged, total, page: Number(page), pageSize: Number(pageSize) };
     },
 
-    // 详情：默认不含已删除记录（已删记录对外视为不存在）
-    async get(id, orgId) {
+    // 详情：默认不含已删除记录（已删记录对外视为不存在）；v1.18.80 起带角色可见范围
+    async get(id, orgId, viewer) {
       const rows = await load();
-      const r = filterByDeleted(filterByOrg(rows, orgId), false).find((r) => String(r.id) === String(id)) || null;
+      const scoped = viewer ? filterByOrg(rows, orgId).filter((r) => viewerMatches(r, viewer)) : filterByOrg(rows, orgId);
+      const r = filterByDeleted(scoped, false).find((r) => String(r.id) === String(id)) || null;
       return r ? normalizeAudit(r) : null;
     },
 
@@ -298,10 +302,11 @@ export function createDevRepo(filePath) {
       };
     },
 
-    async exportRows({ status, type, department, keyword, auditStatus, deleted, sort, order, orgId } = {}) {
+    async exportRows({ status, type, department, keyword, auditStatus, deleted, sort, order, orgId, viewer } = {}) {
       const rows = await load();
-      // 导出：默认仅未删除记录（回收站数据不进报表）
-      const scoped = filterByOrg(rows, orgId);
+      // 导出：默认仅未删除记录（回收站数据不进报表）；v1.18.80 起带角色可见范围
+      let scoped = filterByOrg(rows, orgId);
+      if (viewer) scoped = scoped.filter((r) => viewerMatches(r, viewer));
       const active = applyFilters(filterByDeleted(scoped, deleted), { status, type, department, keyword, auditStatus });
       return sortRows(active, sort, order).map(normalizeAudit);
     },

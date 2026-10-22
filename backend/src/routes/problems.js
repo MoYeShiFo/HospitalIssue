@@ -5,7 +5,8 @@ import { EXPORT_COLUMNS } from '../services/export.js';
 import { toCSV, toXLSX, describeConditions, toDraftXLSX, buildDraftRecord } from '../services/export.js';
 import { removeStoredFiles } from '../services/uploads.js';
 import { authenticate } from '../auth/middleware.js';
-import { requirePermission } from '../auth/authorize.js';
+import { requirePermission, isPlatformAdmin } from '../auth/authorize.js';
+import { buildViewer } from '../db/problemScope.js';
 import { getSettings } from '../settings/index.js';
 import { permissionsFor } from '../permissions.js';
 import { audit } from '../audit/index.js';
@@ -82,6 +83,16 @@ async function canSeeDeleted(user, orgId) {
   return permissionsFor(permissions, user.role).actions['issue.delete'] === true;
 }
 
+// 角色可见范围（v1.18.80）：平台管理员/院方管理员看全部（viewer=null）；
+// 登记员（院方 reporter）默认只看自己登记的；公司用户默认看处理人或登记人是自己的。
+// 平台管理员以库为准（isPlatformAdmin），机构管理员由 req.user.role（成员关系权威角色）判定。
+async function currentViewer(req) {
+  if (req.user.role === 'admin') return null;
+  const platformAdmin = await isPlatformAdmin(req);
+  if (platformAdmin) return null;
+  return buildViewer(req.user);
+}
+
 router.get('/problems', async (req, res) => {
   try {
     const query = parseQuery(req.query);
@@ -89,7 +100,8 @@ router.get('/problems', async (req, res) => {
       return res.status(403).json({ error: '仅具备「删除问题」权限的角色可查看回收站' });
     }
     const repo = await getRepo();
-    res.json(await repo.list({ ...query, orgId: req.orgId }));
+    const viewer = await currentViewer(req);
+    res.json(await repo.list({ ...query, orgId: req.orgId, viewer }));
   } catch (e) {
     fail(res, e);
   }
@@ -110,7 +122,9 @@ router.get('/problems/export', requirePermission('issue.export'), async (req, re
     const format = (req.query.format || 'xlsx').toLowerCase();
     const query = parseQuery(req.query);
     delete query.deleted;   // 导出始终导正常数据，不受回收站视图影响
-    const rows = await repo.exportRows({ ...query, orgId: req.orgId });
+    // v1.18.80：导出同样遵循角色可见范围（登记员只导自己的，公司用户只导与自己相关的）
+    const viewer = await currentViewer(req);
+    const rows = await repo.exportRows({ ...query, orgId: req.orgId, viewer });
     // 字段白名单：只接受 export.js 中定义的列 key，非法项直接丢弃
     const allowed = new Set(EXPORT_COLUMNS.map((c) => c.key));
     let fields = req.query.fields;
@@ -259,6 +273,7 @@ router.get('/problems/:id', async (req, res) => {
     const id = parseIdParam(req.params.id);
     if (id === null) return res.status(404).json({ error: '问题不存在' });
     const repo = await getRepo();
+    const viewer = await currentViewer(req);
     let rec;
     if (req.query.deleted === '1') {
       if (!(await canSeeDeleted(req.user, req.orgId))) {
@@ -266,7 +281,7 @@ router.get('/problems/:id', async (req, res) => {
       }
       rec = await repo.getByIdIncludeDeleted(id, req.orgId);
     } else {
-      rec = await repo.get(id, req.orgId);
+      rec = await repo.get(id, req.orgId, viewer);
     }
     if (!rec) return res.status(404).json({ error: '未找到该问题' });
     res.json(rec);
@@ -393,6 +408,51 @@ router.post('/problems', requirePermission('issue.create'), async (req, res) => 
     const rec = await repo.create({ ...value, createdBy: req.user.username, org_id: req.orgId });
     await audit({ username: req.user.username, action: 'CREATE_ISSUE', target: 'problem#' + rec.id, detail: rec.title });
     res.status(201).json(rec);
+  } catch (e) {
+    fail(res, e);
+  }
+});
+
+// 批量导入（v1.18.80）：前端 SheetJS 解析 Excel 后按行 POST JSON；服务端逐行复用
+// validateCreate 校验入库，行级错误不中断整体。登记人缺省为导入人显示名；
+// createdBy 恒为导入人账号（服务端注入）；单次上限 500 行；audit_status 与单条创建一致（待审核）。
+router.post('/problems/import', requirePermission('issue.create'), async (req, res) => {
+  try {
+    const rows = Array.isArray(req.body && req.body.rows) ? req.body.rows : [];
+    if (!rows.length) return res.status(400).json({ error: '未收到可导入的数据行' });
+    if (rows.length > 500) return res.status(400).json({ error: '单次导入上限 500 行，请分批处理' });
+    const repo = await getRepo();
+    const defaultRegistrar = String(req.user.name || req.user.username || '');
+    const results = [];
+    let created = 0;
+    for (let i = 0; i < rows.length; i++) {
+      const raw = rows[i] || {};
+      const { ok, errors, value } = validateCreate(raw);
+      if (!ok) {
+        results.push({ row: i + 1, ok: false, title: String(raw.title || ''), error: errors.join('; ') });
+        continue;
+      }
+      try {
+        const rec = await repo.create({
+          ...value,
+          registrar: value.registrar || defaultRegistrar,
+          createdBy: req.user.username,
+          org_id: req.orgId,
+        });
+        created++;
+        results.push({ row: i + 1, ok: true, id: rec.id, title: rec.title });
+        await audit({ username: req.user.username, action: 'IMPORT_ISSUE', target: 'problem#' + rec.id, detail: rec.title });
+      } catch (e) {
+        results.push({ row: i + 1, ok: false, title: String(raw.title || ''), error: e.message || '写入失败' });
+      }
+    }
+    await audit({
+      username: req.user.username,
+      action: 'IMPORT_ISSUES',
+      target: `batch(${rows.length})`,
+      detail: `成功 ${created} 条 / 失败 ${rows.length - created} 条`,
+    });
+    res.json({ total: rows.length, created, failed: rows.length - created, results });
   } catch (e) {
     fail(res, e);
   }

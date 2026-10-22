@@ -4,6 +4,7 @@ import { api, getToken, setToken, clearToken, STATUSES, DEFAULT_PERMISSIONS, MEN
 import FilterBar from './components/FilterBar.vue';
 import ProblemList from './components/ProblemList.vue';
 import ProblemForm from './components/ProblemForm.vue';
+import ProblemImport from './components/ProblemImport.vue';
 import ProblemDetail from './components/ProblemDetail.vue';
 import Cockpit from './components/Cockpit.vue';
 import ExportButtons from './components/ExportButtons.vue';
@@ -49,6 +50,7 @@ const pageSize = ref(PAGE_SIZES.includes(Number(localStorage.getItem('issue_trac
 const selected = ref([]);
 const bulkStatus = ref('');
 const showForm = ref(false);
+const showImport = ref(false);
 const editing = ref(null);
 const showPwd = ref(false);
 const sort = ref({ by: 'created_at', order: 'desc' });
@@ -769,6 +771,7 @@ watch(sessionExpired, (fired) => {
           </div>
           <div class="actions">
             <button v-if="can('issue.create')" class="primary" @click="openCreate">+ 登记问题</button>
+            <button v-if="can('issue.create')" @click="showImport = true">批量导入</button>
             <ExportButtons v-if="can('issue.export')" :filters="exportParams" />
           </div>
         </header>
@@ -897,6 +900,7 @@ watch(sessionExpired, (fired) => {
       @delete="deleteFromDetail"
       @refresh="refreshDetail"
     />
+    <ProblemImport v-if="showImport" @close="showImport = false" @imported="load" />
     <ChangePassword v-if="showPwd" @close="showPwd = false" />
 
     <!-- v1.18.22：引用问题到聊天的弹框（v1.18.24 传入当前用户，供会话显示名与回读校验用） -->

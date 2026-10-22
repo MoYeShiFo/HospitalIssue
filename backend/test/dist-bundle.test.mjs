@@ -216,7 +216,10 @@ try {
   // v1.18.73：全类型预览（Office / 音视频 / 更多文本）渲染容器类名与版本号必须真的编进产物
   assert(jsText.includes('fm-xls') && jsText.includes('fm-docx-wrap') && jsText.includes('fm-media'),
     'JS 产物含全类型预览渲染容器类名（fm-xls / fm-docx-wrap / fm-media，v1.18.73）');
-  assert(jsText.includes('v1.18.79'), 'JS 产物含版本号 v1.18.79（来自 src/version.js，v1.18.78 修复 + v1.18.79 文件分类）');
+  assert(jsText.includes('v1.18.80'), 'JS 产物含版本号 v1.18.80（来自 src/version.js，v1.18.80 导入+角色可见范围）');
+  // v1.18.80：问题批量导入弹窗与导入流程文案必须真的编进产物（只钉字符串字面量/CSS 规则，函数名会被压缩）
+  assert(jsText.includes('批量导入问题') && jsText.includes('确认导入') && jsText.includes('下载导入模板'), 'JS 产物含批量导入弹窗标题/确认按钮/模板链接文案（v1.18.80）');
+  assert(cssText.includes('.pi-steps') && cssText.includes('.pi-fails'), 'CSS 产物含导入步骤说明与失败清单样式（v1.18.80）');
   // v1.18.79：分类筛选与分类列必须真的编进产物（只钉字符串字面量/CSS 规则，函数名会被压缩）
   assert(jsText.includes('全部分类') && jsText.includes('未分类'), 'JS 产物含分类筛选选项文案（v1.18.79）');
   assert(cssText.includes('.fm-cat-select') && cssText.includes('.fm-cat-none'), 'CSS 产物含分类下拉与未分类样式（v1.18.79）');
