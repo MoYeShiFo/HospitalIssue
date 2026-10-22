@@ -281,6 +281,20 @@ async function main() {
   const auditRows = (auditList.body && auditList.body.rows) || [];
   assert(auditRows.some((a) => a.action === 'UPLOAD_FILE'), '审计日志包含 UPLOAD_FILE');
   assert(auditRows.some((a) => a.action === 'DELETE_FILE'), '审计日志包含 DELETE_FILE');
+
+  // ── v1.18.74：磁盘文件丢失时预览/下载返回明确 404（不再误导为「服务器内部错误」）──
+  const lostUp = await U(`${BASE}/api/files`, tk, { name: '会丢失的文件.txt', type: 'text/plain', content: 'LOST-FILE', visibility: 'org' });
+  assert(lostUp.status === 201 && lostUp.body.stored_name, '上传一个用于构造磁盘丢失场景的文件');
+  const lostPath = path.join(uploads, lostUp.body.stored_name);
+  assert(fs.existsSync(lostPath), '上传后磁盘文件存在');
+  fs.unlinkSync(lostPath);
+  assert(!fs.existsSync(lostPath), '已模拟磁盘文件丢失（记录仍在、实体不在）');
+  const pvLost = await fetch(`${BASE}/api/files/${lostUp.body.id}/preview`, { headers: { Authorization: `Bearer ${tk}` } });
+  const pvLostBody = await pvLost.text();
+  assert(pvLost.status === 404 && /已丢失/.test(pvLostBody), `预览时磁盘文件缺失 → 明确 404 提示（实测 ${pvLost.status}: ${pvLostBody.slice(0, 36)}）`);
+  const dlLost = await fetch(`${BASE}/api/files/${lostUp.body.id}/download`, { headers: { Authorization: `Bearer ${tk}` } });
+  const dlLostBody = await dlLost.text();
+  assert(dlLost.status === 404 && /已丢失/.test(dlLostBody), `下载时磁盘文件缺失 → 明确 404 提示（实测 ${dlLost.status}）`);
 }
 
 try {
@@ -293,4 +307,5 @@ try {
 }
 
 console.log(`\nRESULT: passed=${passed} failed=${failed}`);
+
 process.exit(failed ? 1 : 0);
