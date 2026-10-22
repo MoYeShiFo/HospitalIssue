@@ -64,6 +64,11 @@ function previewTypeOf(originalName, mime) {
   return null;
 }
 
+// 档位中文名（审计日志用）
+function VIS_LABEL_ZH(v) {
+  return { all_orgs: '全机构共享', org: '本机构', org_company: '本机构公司用户' }[v] || v;
+}
+
 // 取文件记录（读路径用）：先按当前机构查；查不到且为 all_orgs 档（显式跨机构共享）时
 // 按 id 裸查放行——该档在任何机构的列表可见，按 id 的读/预览/下载必须与列表一致
 // （v1.18.72：修正「列表可见但预览/下载 404」）。org / org_company 档跨机构仍一律
@@ -257,6 +262,64 @@ router.get('/:id/preview', authenticate, async (req, res) => {
         res.status(404).json({ error: '文件发送失败，磁盘文件可能已丢失，请联系管理员' });
       }
     });
+  } catch (e) {
+    send500(res, e);
+  }
+});
+
+// 编辑登记信息（v1.18.77）：修改可见范围（谁能查看）/备注；链接行还可改名称与 URL。
+// 权限口径与删除一致：上传者本人，或具备 file.delete 权限者；跨机构仅放行 all_orgs 上传者本人；
+// all_orgs 档设置仅平台管理员（以库为准）。已上传文件与磁盘实体同名绑定，不允许改名。
+router.patch('/:id', authenticate, async (req, res) => {
+  try {
+    const found = await loadFileInOrg(req.params.id, req.orgId);
+    if (!found || !canSeeFile(found.rec, req.user, req.orgId)) {
+      return res.status(404).json({ error: '文件不存在或您无权查看' });
+    }
+    const rec = found.rec;
+    const isOwner = rec.uploaded_by === req.user.username;
+    if (Number(rec.org_id) !== Number(req.orgId) && !isOwner) {
+      return res.status(404).json({ error: '文件不存在或您无权查看' });
+    }
+    if (!isOwner && !(await hasFileDeletePermission(req))) {
+      return res.status(403).json({ error: '没有执行此操作的权限' });
+    }
+    const body = req.body || {};
+    const patch = {};
+    if (body.visibility != null) {
+      const v = String(body.visibility);
+      if (!VISIBILITY_LIST.includes(v)) return res.status(400).json({ error: '无效的可见范围' });
+      if (v === 'all_orgs' && !(await isPlatformAdmin(req))) {
+        return res.status(403).json({ error: '「全机构共享」仅平台管理员可设置' });
+      }
+      patch.visibility = v;
+    }
+    if (body.remark != null) patch.remark = String(body.remark).slice(0, 500);
+    if (rec.link_url) {
+      if (body.name != null) {
+        const n = String(body.name).trim();
+        if (!n) return res.status(400).json({ error: '链接名称不能为空' });
+        if (n.length > 255) return res.status(400).json({ error: '链接名称过长（上限 255 字）' });
+        patch.original_name = n;
+      }
+      if (body.url != null) {
+        const u = String(body.url).trim();
+        if (!/^https?:\/\/\S+$/i.test(u)) return res.status(400).json({ error: '链接格式无效，需以 http:// 或 https:// 开头' });
+        if (u.length > 1000) return res.status(400).json({ error: '链接过长（上限 1000 字符）' });
+        patch.link_url = u;
+      }
+    } else if (body.name != null && String(body.name).trim() !== rec.original_name) {
+      return res.status(400).json({ error: '已上传文件不支持修改名称' });
+    }
+    if (!Object.keys(patch).length) return res.status(400).json({ error: '没有需要修改的内容' });
+    const updated = await found.store.updateFile(req.params.id, rec.org_id, patch);
+    await audit({
+      username: req.user.username,
+      action: 'EDIT_FILE',
+      target: updated.original_name,
+      detail: `可见范围改为：${VIS_LABEL_ZH(updated.visibility)}`,
+    });
+    res.json({ ...updated, mine: updated.uploaded_by === req.user.username });
   } catch (e) {
     send500(res, e);
   }

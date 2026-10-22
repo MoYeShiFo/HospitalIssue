@@ -167,6 +167,25 @@ export function createMssqlFileStore(cfg) {
       return res.recordset.length ? map(res.recordset[0]) : null;
     },
 
+    // 局部更新（v1.18.77 编辑：可见范围/备注；链接行还可改名称与 URL）。仅改传入字段。
+    async updateFile(id, orgId, patch = {}) {
+      const num = Number(id);
+      if (!Number.isFinite(num)) return null;
+      const p = await getPool();
+      const req = p.request();
+      req.input('id', sql.BigInt, num);
+      let where = 'id = @id';
+      if (orgId != null) { req.input('org', sql.BigInt, Number(orgId)); where += ' AND org_id = @org'; }
+      const sets = [];
+      if (patch.visibility != null) { req.input('visibility', sql.NVarChar(16), patch.visibility); sets.push('visibility = @visibility'); }
+      if (patch.remark != null) { req.input('remark', sql.NVarChar(500), patch.remark); sets.push('remark = @remark'); }
+      if (patch.original_name != null) { req.input('original_name', sql.NVarChar(255), patch.original_name); sets.push('original_name = @original_name'); }
+      if (patch.link_url != null) { req.input('link_url', sql.NVarChar(1000), patch.link_url); sets.push('link_url = @link_url'); }
+      if (!sets.length) return this.getFileById(num, orgId);
+      const res = await req.query(`UPDATE dbo.app_file OUTPUT INSERTED.* SET ${sets.join(', ')} WHERE ${where}`);
+      return res.recordset.length ? map(res.recordset[0]) : null;
+    },
+
     // 机构级联清理（删除机构时用）：返回被删记录的 stored_name 列表，调用方清理磁盘。
     async removeByOrg(orgId) {
       if (orgId == null) return [];
