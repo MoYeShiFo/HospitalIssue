@@ -209,6 +209,8 @@ try {
   assert(jsText.includes('file.upload') && jsText.includes('file.delete'),
     'JS 产物含 file.upload / file.delete 权限 key（前后端逐字一致红线）');
   assert(cssText.includes('.fm-badge'), 'CSS 产物含三档徽标样式 .fm-badge（v1.18.70）');
+  // v1.18.71：白名单外类型预览按钮置灰提示（修 .xlsx 等类型出现「两个下载」按钮）
+  assert(jsText.includes('该类型需下载后查看'), 'JS 产物含预览置灰提示「该类型需下载后查看」（v1.18.71）');
   const fmTabCountRule = (cssText.match(/\.fm-tab-count(?:\[[^\]]*\])?\{[^}]*\}/) || [''])[0];
   assert(!!fmTabCountRule, 'CSS 产物含 .fm-tab-count 规则本体（分类计数徽标，scoped 后缀容错）');
   // v1.18.28: 数据驾驶舱「平均处理时长」改按工作日 8 小时折算 —— 口径提示文案必须真的编进产物

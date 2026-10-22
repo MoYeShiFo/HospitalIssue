@@ -267,7 +267,12 @@ onBeforeUnmount(() => {
             <td class="fm-muted">{{ fmtTime(r.created_at) }}</td>
             <td class="fm-muted fm-remark" :title="r.remark">{{ r.remark || '—' }}</td>
             <td class="col-ops">
-              <button class="small" @click="openPreview(r)">{{ canPreview(r.original_name) ? '预览' : '下载' }}</button>
+              <button
+                class="small"
+                :disabled="!canPreview(r.original_name)"
+                :title="canPreview(r.original_name) ? '在线预览' : '该类型需下载后查看'"
+                @click="openPreview(r)"
+              >预览</button>
               <button class="small" @click="download(r)">下载</button>
               <button v-if="canDeleteRow(r)" class="small danger" @click="askDelete(r)">删除</button>
             </td>
