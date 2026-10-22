@@ -1,7 +1,6 @@
 // v1.18.70 验证：文件管理模块真实排版与交互（CDP + 隔离 dev 后端 + 同源代理）。
 // 断言：导航位置（业务工作组、kb 之后）/ 空态 / 分类 tab 与计数 / 上传弹窗三档
-//       （平台管理员 all_orgs 可选）/ UI 上传 → 列表徽标 / 在线预览文本 / tab 即时筛选 /
-//       白名单外类型预览按钮置灰（v1.18.71 修「两个下载」）/ 深色主题。
+//       （平台管理员 all_orgs 可选）/ UI 上传 → 列表徽标 / 在线预览（文本 + Excel + Word + PPT）/ tab 即时筛选 / 深色主题。
 // 用法：node test/verify-files.mjs
 import http from 'node:http';
 import { spawn } from 'node:child_process';
@@ -9,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { findChromium, startChrome, openPage, closePage, waitFor, evaluate, settle, waitAnimations, waitDevtools, screenshot } from './_cdp.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -21,6 +21,35 @@ const BPORT = 3135, PPORT = 8097, CPORT = 8137;
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'hit-files-'));
 const uploadSample = path.join(TMP, 'CDP验证文件.txt');
 fs.writeFileSync(uploadSample, 'CDP-PREVIEW-TEXT\n文件管理预览验证', 'utf8');
+
+// Office 样例（用前端同款库在 node 端生成，确保真实可读；验证 v1.18.73 全类型预览）
+const require = createRequire(import.meta.url);
+const XLSX = require('xlsx');
+const JSZip = require('jszip');
+const xlsxSample = path.join(TMP, 'CDP验证表格.xlsx');
+{
+  const ws = XLSX.utils.aoa_to_sheet([['CDP-XLS-HELLO', '列B'], ['数值', '2']]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+  fs.writeFileSync(xlsxSample, XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+}
+const docxSample = path.join(TMP, 'CDP验证文档.docx');
+{
+  const z = new JSZip();
+  z.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>');
+  z.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+  z.file('word/document.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>CDP-DOCX-HELLO</w:t></w:r></w:p></w:body></w:document>');
+  z.file('word/_rels/document.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>');
+  z.file('word/styles.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"></w:styles>');
+  fs.writeFileSync(docxSample, await z.generateAsync({ type: 'nodebuffer' }));
+}
+const pptxSample = path.join(TMP, 'CDP验证演示.pptx');
+{
+  const z = new JSZip();
+  z.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>');
+  z.file('ppt/slides/slide1.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>CDP-PPT-HELLO</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>');
+  fs.writeFileSync(pptxSample, await z.generateAsync({ type: 'nodebuffer' }));
+}
 
 const devEnv = { ...process.env, PORT: String(BPORT), DB_DRIVER: 'dev',
   DEV_DB_PATH: path.join(TMP, 'issues.json'), DEV_USERS_PATH: path.join(TMP, 'users.json'),
@@ -37,6 +66,28 @@ async function waitServer() { for (let i = 0; i < 100; i++) { try { const r = aw
 
 let pass = 0, fail = 0;
 function check(name, ok, detail) { if (ok) { pass++; console.log('PASS ', name, detail || ''); } else { fail++; console.log('FAIL ', name, detail || ''); } }
+
+// 通过上传弹窗上传一个本地文件（真实走 DOM.setFileInputFiles → multipart 上传）
+async function uploadFile(page, filePath) {
+  const name = path.basename(filePath);
+  await evaluate(page, `document.querySelector('.fm-page .page-head .btn.primary').click()`);
+  await waitFor(page, "document.querySelector('.fm-modal')", 'upload-modal2');
+  await settle(page);
+  const doc = await page.send('DOM.getDocument', { depth: -1 });
+  const inputNode = await page.send('DOM.querySelector', { nodeId: doc.root.nodeId, selector: '.fm-modal input[type=file]' });
+  await page.send('DOM.setFileInputFiles', { files: [filePath], nodeId: inputNode.nodeId });
+  await settle(page);
+  await evaluate(page, `document.querySelector('.fm-modal-foot .primary').click()`);
+  // 等待「包含该文件名」的行真正出现（列表里可能已有其他行，不能只等 tbody tr 存在）
+  await waitFor(page, `[...document.querySelectorAll('.fm-page tbody tr')].some(r=>(r.textContent||'').includes(${JSON.stringify(name)}))`, 'row-' + name, 10000);
+  await settle(page); await waitAnimations(page);
+}
+// 点击指定文件名所在行的「预览」按钮
+async function previewByFile(page, name) {
+  await evaluate(page, `(() => { const tr=[...document.querySelectorAll('.fm-page tbody tr')].find(r=>(r.textContent||'').includes(${JSON.stringify(name)})); const b=tr && [...tr.querySelectorAll('td.col-ops button')].find(x=>x.textContent==='预览'); if(b) b.click(); return !!b; })()`);
+  await waitFor(page, "document.querySelector('.fm-preview-body')", 'preview-modal2');
+  await settle(page); await waitAnimations(page);
+}
 
 async function openFilesPage(page) {
   // 展开所在分组（默认展开含当前视图的组；防御性处理折叠态）
@@ -66,6 +117,8 @@ async function main() {
   await settle(page); await waitAnimations(page);
 
   // ===== 1. 导航位置：业务工作组内，位于「运维知识库」之后 =====
+  // 等侧栏分组真正渲染出来（开发后端冷启动可能稍慢），避免查到空结构导致误判
+  await waitFor(page, "[...document.querySelectorAll('.nav-group-head')].some(h=>(h.textContent||'').includes('业务工作'))", 'nav-work-group', 5000);
   const navPos = await evaluate(page, `(() => {
     const groups=[...document.querySelectorAll('.nav-group')];
     const work=groups.find(g=>{ const h=g.querySelector('.nav-group-head'); return h && (h.textContent||'').includes('业务工作'); });
@@ -127,6 +180,26 @@ async function main() {
   await screenshot(page, path.join(__dirname, 'files-preview.png'));
   await evaluate(page, `document.querySelector('.fm-preview-modal .fm-modal-foot .small').click()`);
 
+  // ===== 6.5 全类型预览（v1.18.73）：Excel / Word / PPT 站内渲染 =====
+  await uploadFile(page, xlsxSample);
+  await previewByFile(page, 'CDP验证表格.xlsx');
+  const xls = await evaluate(page, `(() => { const t=document.querySelector('.fm-xls table'); return { has: t!==null, txt: t && (t.textContent||'').replace(/\\s+/g,' ').trim() }; })()`);
+  check('Excel 预览渲染为 HTML 表格且含单元格内容', !!xls.has && (xls.txt || '').includes('CDP-XLS-HELLO'), JSON.stringify(xls));
+  await evaluate(page, `document.querySelector('.fm-preview-modal .fm-modal-foot .small').click()`);
+
+  await uploadFile(page, docxSample);
+  await previewByFile(page, 'CDP验证文档.docx');
+  await waitFor(page, "document.querySelector('.fm-docx-wrap') && document.querySelector('.fm-docx-wrap').childElementCount > 0 && (document.querySelector('.fm-docx-wrap').textContent||'').includes('CDP-DOCX-HELLO')", 'docx-render', 8000);
+  const docx = await evaluate(page, `(() => { const w=document.querySelector('.fm-docx-wrap'); return { kids: w? w.childElementCount : 0, txt: w && (w.textContent||'').replace(/\\s+/g,' ').trim() }; })()`);
+  check('Word 预览经 docx-preview 渲染出正文', docx.kids > 0 && (docx.txt || '').includes('CDP-DOCX-HELLO'), JSON.stringify(docx));
+  await evaluate(page, `document.querySelector('.fm-preview-modal .fm-modal-foot .small').click()`);
+
+  await uploadFile(page, pptxSample);
+  await previewByFile(page, 'CDP验证演示.pptx');
+  const ppt = await evaluate(page, `(() => { const pre=document.querySelector('.fm-preview-body pre'); return { txt: pre && (pre.textContent||'').replace(/\\s+/g,' ').trim() }; })()`);
+  check('PPT 预览抽取大纲文本', (ppt.txt || '').includes('CDP-PPT-HELLO'), JSON.stringify(ppt));
+  await evaluate(page, `document.querySelector('.fm-preview-modal .fm-modal-foot .small').click()`);
+
   // ===== 7. tab 即时筛选：切「全机构共享」→ 0 条；回「全部」→ 1 条 =====
   await evaluate(page, `[...document.querySelectorAll('.fm-tab')].find(b=>b.textContent.includes('全机构共享')).click()`);
   await waitFor(page, "document.querySelector('.fm-empty')", 'scope-empty', 5000);
@@ -135,36 +208,10 @@ async function main() {
   await evaluate(page, `[...document.querySelectorAll('.fm-tab')].find(b=>b.textContent.trim().startsWith('全部')).click()`);
   await waitFor(page, "document.querySelector('.fm-page tbody tr')", 'scope-back');
   const back = await evaluate(page, `document.querySelectorAll('.fm-page tbody tr').length`);
-  check('切回「全部」恢复 1 条', back === 1, 'rows=' + back);
+  // 当前已上传 4 个文件（txt + xlsx + docx + pptx，均为本机构档），切回「全部」应恢复 4 条
+  check('切回「全部」恢复全部文件（4 条）', back === 4, 'rows=' + back);
 
-  // ===== 8. 白名单外类型（xlsx）：预览按钮置灰提示、下载按钮可用（v1.18.71 修「两个下载」）=====
-  const xlsxSample = path.join(TMP, 'CDP验证表格.xlsx');
-  fs.writeFileSync(xlsxSample, 'XLSXDATA', 'utf8');
-  const fd = new FormData();
-  fd.append('file', new Blob(['XLSXDATA']), 'CDP验证表格.xlsx');
-  fd.append('visibility', 'org');
-  const upX = await fetch(`http://127.0.0.1:${PPORT}/api/files`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
-  check('API 上传 xlsx 成功', upX.status === 201, 'status=' + upX.status);
-  await evaluate(page, `location.reload()`);
-  await waitFor(page, "document.querySelector('.sidebar')", 'sidebar-reload');
-  await settle(page); await waitAnimations(page);
-  await openFilesPage(page);
-  await waitFor(page, "[...document.querySelectorAll('.fm-page tbody tr')].some(t=>(t.textContent||'').includes('CDP验证表格.xlsx'))", 'xlsx-row', 10000);
-  await settle(page); await waitAnimations(page);
-  const ops = await evaluate(page, `(() => {
-    const trs=[...document.querySelectorAll('.fm-page tbody tr')];
-    const tr=trs.find(t=>(t.textContent||'').includes('CDP验证表格.xlsx'));
-    if(!tr) return null;
-    const btns=[...tr.querySelectorAll('td.col-ops button')];
-    const pv=btns.find(b=>b.textContent==='预览');
-    const dl=btns.find(b=>b.textContent==='下载');
-    return { pvDisabled: pv ? !!pv.disabled : null, pvTitle: pv ? pv.getAttribute('title') : null, dlDisabled: dl ? !!dl.disabled : null, btnTexts: btns.map(b=>b.textContent) };
-  })()`);
-  check('白名单外类型：预览按钮置灰并带提示', !!ops && ops.pvDisabled === true && /需下载后查看/.test(ops.pvTitle || ''), JSON.stringify(ops));
-  check('白名单外类型：下载按钮可用（不再出现两个下载）', !!ops && ops.dlDisabled === false, JSON.stringify(ops));
-  await screenshot(page, path.join(__dirname, 'files-light.png'));
-
-  // ===== 9. 深色主题：页面可读、无浅色底 leak =====
+  // ===== 8. 深色主题：页面可读、无浅色底 leak =====
   await evaluate(page, `localStorage.setItem('issue_tracker_theme','dark'); location.reload();`);
   await waitFor(page, "document.querySelector('.sidebar')", 'sidebar-dark');
   await settle(page); await waitAnimations(page);

@@ -17,19 +17,41 @@ const router = express.Router();
 // 三档可见范围由文件的 visibility 字段承载，服务端按 org_id + user_type 强制判定；
 // 跨机构按 id 读取一律 404（不暴露存在性）。上传/删除为功能权限（file.upload / file.delete）。
 
-// 预览白名单：仅这些类型允许站内 inline 渲染；其余（含 HTML/SVG —— 同源渲染可窃 token）一律走下载。
+// 预览类型表（v1.18.73 大幅扩表，支持 Office / SVG / 音视频 / 更多文本）：
+// 凡在本表内的类型均允许站内 inline 渲染（fetch blob 后由前端按扩展名分派渲染器）；
+// 不在此表内（如 exe/dll/zip 等无预览意义者）一律 302 转强制下载。
+// 同源 XSS 防御：HTML 经 .htm/.html 扩展名以下列 text/plain 提供（前端当源码文本展示，不渲染执行）；
+// SVG 以 image/svg+xml 提供但前端仅经 <img> 渲染（不执行脚本）；Office 由前端专用 JS 库本地解析（不回传可执行内容）。
 const PREVIEW_TYPES = new Set([
-  'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp',
+  'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp', 'image/svg+xml', 'image/x-icon',
   'application/pdf',
-  'text/plain', 'text/markdown', 'text/csv', 'application/json',
+  'text/plain', 'text/markdown', 'text/csv', 'text/xml', 'application/json',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'video/mp4', 'video/webm', 'video/quicktime',
+  'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4',
 ]);
-// 扩展名 → 固定 Content-Type（优先于上传时记录的 mime，杜绝伪造/误判）
+// 扩展名 → 固定 Content-Type（优先于上传时记录的 mime，杜绝伪造/误判）。
+// 注意：.html/.htm 映射为 text/plain（前端当源码展示，防同源 XSS，defense-in-depth）；
+//   .svg 映射 image/svg+xml，但前端仅经 <img> 渲染（不执行脚本）。
 const EXT_TYPE = {
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
-  '.webp': 'image/webp', '.bmp': 'image/bmp',
+  '.webp': 'image/webp', '.bmp': 'image/bmp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
   '.pdf': 'application/pdf',
   '.txt': 'text/plain', '.md': 'text/markdown', '.csv': 'text/csv', '.json': 'application/json',
-  '.log': 'text/plain',
+  '.log': 'text/plain', '.xml': 'text/xml', '.yml': 'text/plain', '.yaml': 'text/plain',
+  '.html': 'text/plain', '.htm': 'text/plain',
+  '.js': 'text/plain', '.ts': 'text/plain', '.py': 'text/plain', '.java': 'text/plain',
+  '.c': 'text/plain', '.cpp': 'text/plain', '.h': 'text/plain', '.sql': 'text/plain',
+  '.sh': 'text/plain', '.bat': 'text/plain', '.ini': 'text/plain', '.conf': 'text/plain', '.css': 'text/plain',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.xls': 'application/vnd.ms-excel',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime',
+  '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.m4a': 'audio/mp4',
 };
 
 // 可预览则返回固定 Content-Type，否则 null（调用方转强制下载）
@@ -159,7 +181,7 @@ router.get('/:id/preview', authenticate, async (req, res) => {
     }
     const type = previewTypeOf(found.rec.original_name, found.rec.mime);
     if (!type) {
-      // HTML/SVG/Office 等：不允许站内渲染，转强制下载（防同源 XSS）
+      // 不在 EXT_TYPE 内的类型（如 exe/dll/zip/rar 等无预览意义者）：不允许站内渲染，转强制下载
       return res.redirect(302, `/api/files/${encodeURIComponent(req.params.id)}/download`);
     }
     const stored = path.basename(String(found.rec.stored_name || ''));

@@ -5,7 +5,7 @@
 //   2) 可见性服务端强制：all_orgs=全机构可见 / org=本机构 / org_company=本机构公司用户；
 //      平台管理员三档全可见；外机构用户只看得到 all_orgs；
 //   3) 跨机构按 id 读（元信息/下载/预览）一律 404，不暴露存在性；
-//   4) 预览白名单 inline + nosniff；HTML 等白名单外 302 转强制下载（防同源 XSS）；
+//   4) 预览 inline + nosniff；HTML 以 text/plain 源码 inline 预览（不执行，同源 XSS 防线由 Content-Type=text/plain + nosniff 保证，v1.18.73）；
 //   5) 删除：本人可删自己的；他人需 file.delete；可见不等于可删；
 //   6) 删除机构级联清理文件登记 + 磁盘文件；
 //   7) 审计日志记录 UPLOAD_FILE / DELETE_FILE。
@@ -231,14 +231,20 @@ async function main() {
     && pvText === 'TEXTDATA-ORG',
     `白名单类型 inline 预览 + nosniff（HTTP ${pv.status}，type=${pv.headers.get('content-type')}）`);
 
-  // HTML 上传 → 预览必须 302 转下载（同源 XSS 防线）。fetch 需 manual 才看得到 302 本身。
+  // HTML 上传 → 预览以 text/plain inline 返回源码（浏览器不执行；同源 XSS 防线由
+  // Content-Type=text/plain + nosniff 保证，v1.18.73 起支持 HTML 源码站内预览，不再 302 转下载）。
   const upHtml = await U(`${BASE}/api/files`, tk, { name: '恶意页面.html', type: 'text/html', content: '<script>alert(1)</script>', visibility: 'org' });
   assert(upHtml.status === 201, `上传 HTML 文件成功（HTTP ${upHtml.status}）`);
   const pvHtml = await fetch(`${BASE}/api/files/${upHtml.body.id}/preview`, {
-    headers: { Authorization: `Bearer ${hTk}` }, redirect: 'manual',
+    headers: { Authorization: `Bearer ${hTk}` },
   });
-  assert(pvHtml.status === 302 && /\/download$/.test(pvHtml.headers.get('location') || ''),
-    `HTML 预览被 302 转强制下载（HTTP ${pvHtml.status}，location=${pvHtml.headers.get('location')}）`);
+  const pvHtmlBody = await pvHtml.text();
+  assert(pvHtml.status === 200
+    && (pvHtml.headers.get('content-type') || '').startsWith('text/plain')
+    && (pvHtml.headers.get('x-content-type-options') || '') === 'nosniff'
+    && /inline/.test(pvHtml.headers.get('content-disposition') || '')
+    && pvHtmlBody.includes('<script>alert(1)</script>'),
+    `HTML 预览以 text/plain 源码 inline 返回（不执行，同源 XSS 防线保持；HTTP ${pvHtml.status}，type=${pvHtml.headers.get('content-type')}）`);
 
   // ===== 5. 删除边界 =====
   const hFileId = hUp.body.id;
