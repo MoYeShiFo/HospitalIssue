@@ -307,6 +307,8 @@ export const api = {
   stats: () => req('/problems/stats'),
   get: (id) => req('/problems/' + id),
   create: (data) => req('/problems', { method: 'POST', body: JSON.stringify(data) }),
+  // 批量导入（v1.18.80）：rows 为前端 SheetJS 解析后的字段对象数组；行级失败不中断
+  importProblems: (rows) => req('/problems/import', { method: 'POST', body: JSON.stringify({ rows }) }),
   update: (id, data) => req('/problems/' + id, { method: 'PUT', body: JSON.stringify(data) }),
   remove: (id) => req('/problems/' + id, { method: 'DELETE' }),
   // 回收站（v1.6 软删除）：恢复 / 彻底删除

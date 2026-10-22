@@ -133,7 +133,7 @@ async function main() {
   await openFilesPage(page);
   const head = await evaluate(page, `(() => { const h=document.querySelector('.fm-page h1'); const s=document.querySelector('.fm-page .sub'); return { title:h && h.textContent, sub:s && (s.textContent||'').replace(/\\s+/g,' ') }; })()`);
   check('页面标题为「文件管理」', head.title === '文件管理', head.title);
-  check('副标题含总数说明', /共\s*0\s*个文件/.test(head.sub || ''), head.sub);
+  check('副标题含总数说明', /共\s*0\s*项/.test(head.sub || ''), head.sub);
   const emptyText = await evaluate(page, `(() => { const e=document.querySelector('.fm-empty'); return e && (e.textContent||'').trim(); })()`);
   check('空态提示可见', !!emptyText && emptyText.length > 4, emptyText);
 
@@ -200,6 +200,53 @@ async function main() {
   check('PPT 预览抽取大纲文本', (ppt.txt || '').includes('CDP-PPT-HELLO'), JSON.stringify(ppt));
   await evaluate(page, `document.querySelector('.fm-preview-modal .fm-modal-foot .small').click()`);
 
+  // ===== 6.6 添加在线文档链接（v1.18.76）：弹窗 → 提交 → 链接行出现「打开」 =====
+  await evaluate(page, `[...document.querySelectorAll('.fm-head-btns .btn')].find(b=>b.textContent.includes('添加链接')).click()`);
+  await waitFor(page, "document.querySelector('.fm-modal input[type=url]')", 'link-dialog', 5000);
+  await evaluate(page, `(() => {
+    const name = document.querySelector('.fm-modal input[type=text]');
+    name.value = 'CDP 在线文档链接'; name.dispatchEvent(new Event('input', { bubbles: true }));
+    const url = document.querySelector('.fm-modal input[type=url]');
+    url.value = 'https://docs.example.com/cdp-link'; url.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await evaluate(page, `[...document.querySelectorAll('.fm-modal .fm-modal-foot button')].find(b=>b.textContent.includes('添加链接')).click()`);
+  await waitFor(page, `[...document.querySelectorAll('.fm-page tbody tr')].some(tr=>tr.textContent.includes('CDP 在线文档链接'))`, 'link-row', 6000);
+  const linkRow = await evaluate(page, `(() => {
+    const tr = [...document.querySelectorAll('.fm-page tbody tr')].find(tr=>tr.textContent.includes('CDP 在线文档链接'));
+    return { hasOpen: !!tr && [...tr.querySelectorAll('button')].some(b=>b.textContent.trim()==='打开'),
+      noPreviewDl: !!tr && ![...tr.querySelectorAll('button')].some(b=>b.textContent.trim()==='预览'||b.textContent.trim()==='下载'),
+      linkCls: !!tr && !!tr.querySelector('.fm-link-name'),
+      badge: tr ? (tr.querySelector('.fm-badge')||{}).textContent : null };
+  })()`);
+  check('链接行显示「打开」按钮且无预览/下载（🔗 样式 + 徽标）', linkRow.hasOpen && linkRow.noPreviewDl && linkRow.linkCls && (linkRow.badge||'').includes('本机构'), JSON.stringify(linkRow));
+
+  // ===== 6.7 编辑登记信息（v1.18.77）：改链接行备注 → 行内容同步更新 =====
+  const linkTr = `[...document.querySelectorAll('.fm-page tbody tr')].find(tr=>tr.textContent.includes('CDP 在线文档链接'))`;
+  await evaluate(page, `(() => { const tr = ${linkTr}; if (!tr) return; const b = [...tr.querySelectorAll('button')].find(x=>x.textContent.trim()==='编辑'); if (b) b.click(); })()`);
+  await waitFor(page, `document.querySelector('.modal[aria-label="编辑登记信息"] input')`, 'edit-dialog', 5000);
+  await evaluate(page, `(() => {
+    const remark = document.querySelector('.modal[aria-label="编辑登记信息"] input[placeholder="例如：补充说明"]');
+    remark.value = 'CDP 已编辑备注'; remark.dispatchEvent(new Event('input', { bubbles: true }));
+    const catSel = document.querySelector('.modal[aria-label="编辑登记信息"] select');
+    catSel.value = '运维'; catSel.dispatchEvent(new Event('change', { bubbles: true }));
+  })()`);
+  await evaluate(page, `[...document.querySelectorAll('.modal[aria-label="编辑登记信息"] .fm-modal-foot button')].find(b=>b.textContent.trim()==='保存修改').click()`);
+  await waitFor(page, `[...document.querySelectorAll('.fm-page tbody tr')].some(tr=>tr.textContent.includes('CDP 已编辑备注'))`, 'edit-saved', 6000);
+  const editChk = await evaluate(page, `(() => {
+    const tr = [...document.querySelectorAll('.fm-page tbody tr')].find(tr=>tr.textContent.includes('CDP 已编辑备注'));
+    return { found: !!tr, cat: tr ? (tr.querySelector('.fm-cat')||{}).textContent : null,
+      badge: tr ? (tr.querySelector('.fm-badge')||{}).textContent : null };
+  })()`);
+  check('编辑备注/分类保存后行内容同步更新（可见范围徽标不变）', editChk.found && editChk.cat === '运维' && (editChk.badge||'').includes('本机构'), JSON.stringify(editChk));
+
+  // ===== 6.8 分类筛选（v1.18.79）：选「运维」只剩 1 条，回「全部分类」恢复 5 条 =====
+  await evaluate(page, `(() => { const s = document.querySelector('.fm-tools .fm-cat-select'); s.value = '运维'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await waitFor(page, `document.querySelectorAll('.fm-page tbody tr').length === 1`, 'cat-filter', 6000);
+  const catF = await evaluate(page, `(() => { const trs=[...document.querySelectorAll('.fm-page tbody tr')]; return { n: trs.length, allOps: trs.every(tr=>(tr.querySelector('.fm-cat')||{}).textContent==='运维') }; })()`);
+  check('分类筛选「运维」仅剩该分类条目', catF.n === 1 && catF.allOps, JSON.stringify(catF));
+  await evaluate(page, `(() => { const s = document.querySelector('.fm-tools .fm-cat-select'); s.value = ''; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await waitFor(page, `document.querySelectorAll('.fm-page tbody tr').length === 5`, 'cat-filter-back', 6000);
+
   // ===== 7. tab 即时筛选：切「全机构共享」→ 0 条；回「全部」→ 1 条 =====
   await evaluate(page, `[...document.querySelectorAll('.fm-tab')].find(b=>b.textContent.includes('全机构共享')).click()`);
   await waitFor(page, "document.querySelector('.fm-empty')", 'scope-empty', 5000);
@@ -208,8 +255,8 @@ async function main() {
   await evaluate(page, `[...document.querySelectorAll('.fm-tab')].find(b=>b.textContent.trim().startsWith('全部')).click()`);
   await waitFor(page, "document.querySelector('.fm-page tbody tr')", 'scope-back');
   const back = await evaluate(page, `document.querySelectorAll('.fm-page tbody tr').length`);
-  // 当前已上传 4 个文件（txt + xlsx + docx + pptx，均为本机构档），切回「全部」应恢复 4 条
-  check('切回「全部」恢复全部文件（4 条）', back === 4, 'rows=' + back);
+  // 当前列表已有 5 项（txt + xlsx + docx + pptx 4 个文件 + 1 条在线链接，均为本机构档），切回「全部」应恢复 5 条
+  check('切回「全部」恢复全部条目（5 条）', back === 5, 'rows=' + back);
 
   // ===== 8. 深色主题：页面可读、无浅色底 leak =====
   await evaluate(page, `localStorage.setItem('issue_tracker_theme','dark'); location.reload();`);

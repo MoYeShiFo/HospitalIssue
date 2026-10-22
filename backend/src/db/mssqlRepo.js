@@ -1,6 +1,7 @@
 import sql from 'mssql';
 import { normalizeSort } from './sort.js';
 import { computeDashboard } from './aggregate.js';
+import { viewerMatches } from './problemScope.js';
 
 // 排序字段白名单 → 实际 SQL 表达式（类型安全，杜绝拼接注入）。
 // 严重程度与状态用 CASE 映射为业务语义序。
@@ -174,6 +175,20 @@ export function createMssqlRepo(cfg) {
       clauses.push('(title LIKE @kw OR department LIKE @kw OR reporter LIKE @kw OR description LIKE @kw OR handler LIKE @kw OR registrar LIKE @kw OR softwareSystem LIKE @kw)');
       req.input('kw', sql.NVarChar(255), `%${f.keyword}%`);
     }
+    // 角色可见范围（v1.18.80）：登记员只看自己登记的；公司用户看处理人/登记人是自己的。
+    // 口径与 db/problemScope.js 的 viewerMatches 逐条等价（trim 后相等；红线）。
+    if (f.viewer && f.viewer.mode === 'none') {
+      // 无法识别身份（username/name 均空）→ fail-closed 一条不可见（与 problemScope.viewerMatches 一致）
+      clauses.push('(1 = 0)');
+    } else if (f.viewer) {
+      req.input('v_name', sql.NVarChar(100), f.viewer.name || '');
+      req.input('v_acct', sql.NVarChar(100), f.viewer.acct || '');
+      if (f.viewer.mode === 'company') {
+        clauses.push("(LTRIM(RTRIM(ISNULL(handler, N''))) = @v_name OR LTRIM(RTRIM(ISNULL(registrar, N''))) = @v_name OR LTRIM(RTRIM(ISNULL(createdBy, N''))) = @v_acct)");
+      } else {
+        clauses.push("(LTRIM(RTRIM(ISNULL(registrar, N''))) = @v_name OR LTRIM(RTRIM(ISNULL(createdBy, N''))) = @v_acct)");
+      }
+    }
     return clauses.length ? 'WHERE ' + clauses.join(' AND ') : '';
   }
 
@@ -216,16 +231,16 @@ export function createMssqlRepo(cfg) {
       return { rows: res.recordset.map(mapRow), total, page: Number(page), pageSize: Number(pageSize) };
     },
 
-    async list({ status, type, department, keyword, auditStatus, deleted, page = 1, pageSize = 20, sort, order, orgId } = {}) {
+    async list({ status, type, department, keyword, auditStatus, deleted, page = 1, pageSize = 20, sort, order, orgId, viewer } = {}) {
       const p = await getPool();
-      const where = buildWhere(p.request(), { status, type, department, keyword, auditStatus, deleted, orgId });
+      const where = buildWhere(p.request(), { status, type, department, keyword, auditStatus, deleted, orgId, viewer });
       const totalReq = p.request();
-      buildWhere(totalReq, { status, type, department, keyword, auditStatus, deleted, orgId });
+      buildWhere(totalReq, { status, type, department, keyword, auditStatus, deleted, orgId, viewer });
       const totalRes = await totalReq.query(`SELECT COUNT(*) AS c FROM dbo.software_issue ${where}`);
       const total = totalRes.recordset[0].c;
 
       const req = p.request();
-      buildWhere(req, { status, type, department, keyword, auditStatus, orgId });
+      buildWhere(req, { status, type, department, keyword, auditStatus, orgId, viewer });
       req.input('offset', sql.Int, (Number(page) - 1) * Number(pageSize));
       req.input('limit', sql.Int, Number(pageSize));
       const res = await req.query(
@@ -234,14 +249,16 @@ export function createMssqlRepo(cfg) {
       return { rows: res.recordset.map(mapRow), total };
     },
 
-    // 详情：默认不含已删除记录（已删记录对外视为不存在）
-    async get(id, orgId) {
+    // 详情：默认不含已删除记录（已删记录对外视为不存在）；v1.18.80 起带角色可见范围（单行 JS 判定，口径同 problemScope）
+    async get(id, orgId, viewer) {
       const p = await getPool();
       const req = p.request().input('id', sql.BigInt, id);
       let where = 'id = @id AND deleted_at IS NULL';
       if (orgId != null) { where += ' AND org_id = @org'; req.input('org', sql.BigInt, orgId); }
       const res = await req.query(`SELECT * FROM dbo.software_issue WHERE ${where}`);
-      return mapRow(res.recordset[0]);
+      const rec = mapRow(res.recordset[0]);
+      if (!rec) return rec;
+      return viewerMatches(rec, viewer) ? rec : null;
     },
 
     // 详情（含已删除）：回收站「查看 / 恢复 / 彻底删除」前取记录用
@@ -440,11 +457,11 @@ export function createMssqlRepo(cfg) {
       return { total: tot.recordset[0].c, byStatus: toMap(s), byType: toMap(t), byDepartment: toMap(d), bySatisfaction: toMap(sat) };
     },
 
-    async exportRows({ status, type, department, keyword, auditStatus, deleted, sort, order, orgId } = {}) {
+    async exportRows({ status, type, department, keyword, auditStatus, deleted, sort, order, orgId, viewer } = {}) {
       const p = await getPool();
       const req = p.request();
-      // 导出：默认仅未删除记录（回收站数据不进报表）
-      const where = buildWhere(req, { status, type, department, keyword, auditStatus, deleted, orgId });
+      // 导出：默认仅未删除记录（回收站数据不进报表）；v1.18.80 起带角色可见范围
+      const where = buildWhere(req, { status, type, department, keyword, auditStatus, deleted, orgId, viewer });
       const res = await req.query(`SELECT * FROM dbo.software_issue ${where} ${orderByClause(sort, order)}`);
       return res.recordset.map(mapRow);
     },

@@ -931,7 +931,8 @@ async function main() {
   // 根因：multipart 的 Content-Disposition filename 被 busboy 按 latin1 解码（defParamCharset 默认值），
   // 而浏览器发的是 UTF-8 字节 → 「会议纪要.pdf」在服务端变成「ä¼šè®®çºªè¦.pdf」。
   const CN_NAME = '会议纪要2026.pdf';
-  const cnRec = await (await mk({ title: '中文名附件测试', department: '信息科', reporter: '张三', type: '故障', severity: '低', description: 'x' })).json();
+  // v1.18.80 起 reporter 读他人记录 404（角色可见范围），故此记录由 reporter 本人创建（createdBy=rep）
+  const cnRec = await (await tokenFetch(RTOKEN, '/api/problems', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: '中文名附件测试', department: '信息科', reporter: '张三', type: '故障', severity: '低', description: 'x' }) })).json();
   const cnFd = new FormData();
   // undici 的 FormData 与 Chromium 行为一致：filename 以 UTF-8 字节直接写进 header
   cnFd.append('file', new Blob(['cn attachment body'], { type: 'application/pdf' }), CN_NAME);
