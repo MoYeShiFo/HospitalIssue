@@ -40,6 +40,9 @@ export function createMssqlFileStore(cfg) {
       -- v1.18.76：在线文档链接（存量库平滑加列）
       IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.app_file') AND name = N'link_url')
         ALTER TABLE dbo.app_file ADD link_url NVARCHAR(1000) NOT NULL DEFAULT N'';
+      -- v1.18.79：文件分类（存量库平滑加列）
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.app_file') AND name = N'category')
+        ALTER TABLE dbo.app_file ADD category NVARCHAR(32) NOT NULL DEFAULT N'';
     `);
   }
 
@@ -56,6 +59,7 @@ export function createMssqlFileStore(cfg) {
     uploaded_by: r.uploaded_by || '',
     uploader_name: r.uploader_name || '',
     link_url: r.link_url || '',
+    category: r.category || '',
     created_at: r.created_at ? new Date(r.created_at).toISOString() : null,
   });
 
@@ -81,7 +85,7 @@ export function createMssqlFileStore(cfg) {
   return {
     async init() { await getPool(); },
 
-    async listFiles({ q, scope, page = 1, pageSize = 20, orgId, user } = {}) {
+    async listFiles({ q, scope, cat, page = 1, pageSize = 20, orgId, user } = {}) {
       const p = await getPool();
       const scope0 = {
         orgId,
@@ -98,15 +102,26 @@ export function createMssqlFileStore(cfg) {
         if (counts[row.k] != null) counts[row.k] = Number(row.c);
         counts.all += Number(row.c);
       }
+      // 分类计数（v1.18.79）：可见集合 + 搜索词（忽略 cat 与 scope）
+      const catReq = p.request();
+      const catRes = await catReq.query(
+        `SELECT ISNULL(NULLIF(category, N''), N'') AS k, COUNT(*) AS c FROM dbo.app_file ${visWhere(catReq, scope0)}${kwWhere(catReq, q)} GROUP BY ISNULL(NULLIF(category, N''), N'')`
+      );
+      const catCounts = {};
+      for (const row of catRes.recordset) catCounts[row.k] = Number(row.c);
 
       const req = p.request();
       let sqlText = `SELECT * FROM dbo.app_file ${visWhere(req, scope0)}${kwWhere(req, q)}`;
+      // '__none__' 哨兵 = 未分类（category 为空串），与「全部」('') 区分（v1.18.79）
+      const catValue = cat === '__none__' ? '' : String(cat || '');
+      if (cat) { req.input('cat', sql.NVarChar(32), catValue); sqlText += " AND ISNULL(NULLIF(category, N''), N'') = @cat"; }
       if (scope) {
         req.input('scope', sql.NVarChar(16), scope);
         sqlText += ' AND visibility = @scope';
       }
       const totalReq = p.request();
       let totalSql = `SELECT COUNT(*) AS c FROM dbo.app_file ${visWhere(totalReq, scope0)}${kwWhere(totalReq, q)}`;
+      if (cat) { totalReq.input('cat', sql.NVarChar(32), catValue); totalSql += " AND ISNULL(NULLIF(category, N''), N'') = @cat"; }
       if (scope) {
         totalReq.input('scope', sql.NVarChar(16), scope);
         totalSql += ' AND visibility = @scope';
@@ -117,7 +132,7 @@ export function createMssqlFileStore(cfg) {
       req.input('offset', sql.Int, (Number(page) - 1) * Number(pageSize));
       req.input('limit', sql.Int, Number(pageSize));
       const res = await req.query(`${sqlText} ORDER BY created_at DESC, id DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`);
-      return { rows: res.recordset.map(map), total, counts, page: Number(page), pageSize: Number(pageSize) };
+      return { rows: res.recordset.map(map), total, counts, catCounts, page: Number(page), pageSize: Number(pageSize) };
     },
 
     // 按 id 取原始记录（仅限当前机构；跨机构一律视为不存在 —— 多机构红线）。
@@ -146,11 +161,12 @@ export function createMssqlFileStore(cfg) {
       req.input('uploaded_by', sql.NVarChar(100), rec.uploaded_by || '');
       req.input('uploader_name', sql.NVarChar(100), rec.uploader_name || '');
       req.input('link_url', sql.NVarChar(1000), rec.link_url || '');
+      req.input('category', sql.NVarChar(32), rec.category || '');
       const res = await req.query(`
         INSERT INTO dbo.app_file
-          (org_id, visibility, original_name, stored_name, size, mime, remark, uploaded_by, uploader_name, link_url)
+          (org_id, visibility, original_name, stored_name, size, mime, remark, uploaded_by, uploader_name, link_url, category)
         OUTPUT INSERTED.*
-        VALUES (@org, @visibility, @original_name, @stored_name, @size, @mime, @remark, @uploaded_by, @uploader_name, @link_url)
+        VALUES (@org, @visibility, @original_name, @stored_name, @size, @mime, @remark, @uploaded_by, @uploader_name, @link_url, @category)
       `);
       return map(res.recordset[0]);
     },
@@ -181,6 +197,7 @@ export function createMssqlFileStore(cfg) {
       if (patch.remark != null) { req.input('remark', sql.NVarChar(500), patch.remark); sets.push('remark = @remark'); }
       if (patch.original_name != null) { req.input('original_name', sql.NVarChar(255), patch.original_name); sets.push('original_name = @original_name'); }
       if (patch.link_url != null) { req.input('link_url', sql.NVarChar(1000), patch.link_url); sets.push('link_url = @link_url'); }
+      if (patch.category != null) { req.input('category', sql.NVarChar(32), patch.category); sets.push('category = @category'); }
       if (!sets.length) return this.getFileById(num, orgId);
       // 注意：UPDATE 的 OUTPUT 子句必须位于 SET 之后（DELETE/INSERT 可前置，UPDATE 前置会报
       // 「Incorrect syntax near 'OUTPUT'」——v1.18.77 首版即踩此坑，v1.18.78 修正）

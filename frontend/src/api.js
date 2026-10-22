@@ -409,11 +409,12 @@ export const api = {
 
   // 文件管理（v1.18.70）：上传 / 三档可见范围列表 / 预览 / 下载 / 删除
   // visibility：'all_orgs' 全机构共享（仅平台管理员可选）/ 'org' 本机构 / 'org_company' 本机构公司用户
-  uploadFile: async (file, visibility, remark) => {
+  uploadFile: async (file, visibility, remark, category) => {
     const fd = new FormData();
     fd.append('file', file);
     fd.append('visibility', visibility || 'org');
     if (remark) fd.append('remark', remark);
+    if (category) fd.append('category', category);
     const res = await authFetch('/files', { method: 'POST', body: fd });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || '上传失败');
@@ -444,11 +445,11 @@ export const api = {
   },
 
   // 添加在线文档链接（v1.18.76）：仅登记 URL，不落磁盘实体；与上传同权限模型
-  addFileLink: async (name, url, visibility, remark) => {
+  addFileLink: async (name, url, visibility, remark, category) => {
     const res = await authFetch('/files/link', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, url, visibility, remark }),
+      body: JSON.stringify({ name, url, visibility, remark, category }),
     });
     if (!res.ok) {
       let msg = '添加链接失败';

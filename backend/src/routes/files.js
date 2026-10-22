@@ -11,6 +11,7 @@ import { upload, repairMojibakeName, removeStoredFiles } from '../services/uploa
 import { audit } from '../audit/index.js';
 import { send500 } from '../errors.js';
 import { canSeeFile, VISIBILITY_LIST } from '../files/visibility.js';
+import { FILE_CATEGORIES, isValidCategory, normalizeCategory } from '../files/categories.js';
 
 const router = express.Router();
 
@@ -103,6 +104,7 @@ router.post('/', authenticate, requirePermission('file.upload'), upload.single('
       return res.status(403).json({ error: '「全机构共享」仅平台管理员可上传' });
     }
     const remark = String(req.body.remark || '').slice(0, 500);
+    if (!isValidCategory(req.body.category)) return res.status(400).json({ error: '无效的文件分类' });
     const originalName = repairMojibakeName(req.file.originalname);
     const store = await getFileStore();
     const rec = await store.createFile({
@@ -113,6 +115,7 @@ router.post('/', authenticate, requirePermission('file.upload'), upload.single('
       size: req.file.size,
       mime: req.file.mimetype || '',
       remark,
+      category: normalizeCategory(req.body.category),
       uploaded_by: req.user.username,
       uploader_name: req.user.name || req.user.username,
       created_at: new Date().toISOString(),
@@ -147,6 +150,8 @@ router.post('/link', authenticate, requirePermission('file.upload'), async (req,
       return res.status(403).json({ error: '「全机构共享」仅平台管理员可选' });
     }
     const remark = String(req.body.remark || '').slice(0, 500);
+    if (!isValidCategory(req.body.category)) return res.status(400).json({ error: '无效的文件分类' });
+    const category = normalizeCategory(req.body.category);
     const store = await getFileStore();
     const rec = await store.createFile({
       org_id: req.orgId,
@@ -156,6 +161,7 @@ router.post('/link', authenticate, requirePermission('file.upload'), async (req,
       size: 0,
       mime: 'web/link',
       remark,
+      category,
       uploaded_by: req.user.username,
       uploader_name: req.user.name || req.user.username,
       link_url: url,
@@ -182,12 +188,14 @@ router.get('/', authenticate, async (req, res) => {
     const result = await store.listFiles({
       q: req.query.q ? String(req.query.q) : '',
       scope: req.query.scope ? String(req.query.scope) : '',
+      cat: req.query.cat ? String(req.query.cat) : '',
       page: req.query.page ? Number(req.query.page) : 1,
       pageSize: req.query.pageSize ? Number(req.query.pageSize) : 20,
       orgId: req.orgId,
       user: req.user,
     });
     result.rows = (result.rows || []).map((r) => ({ ...r, mine: r.uploaded_by === req.user.username }));
+    result.categories = FILE_CATEGORIES; // 分类表随列表下发，前端下拉同源渲染（v1.18.79）
     res.json(result);
   } catch (e) {
     send500(res, e);
@@ -295,6 +303,10 @@ router.patch('/:id', authenticate, async (req, res) => {
       patch.visibility = v;
     }
     if (body.remark != null) patch.remark = String(body.remark).slice(0, 500);
+    if (body.category != null) {
+      if (!isValidCategory(body.category)) return res.status(400).json({ error: '无效的文件分类' });
+      patch.category = normalizeCategory(body.category);
+    }
     if (rec.link_url) {
       if (body.name != null) {
         const n = String(body.name).trim();

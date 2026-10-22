@@ -33,6 +33,11 @@ assert(/DELETE FROM dbo\.app_file OUTPUT DELETED\.id, DELETED\.stored_name, DELE
 // 兜底：源码中不应再存在「UPDATE ... OUTPUT」这种非法顺序
 assert(!/UPDATE dbo\.app_file OUTPUT/.test(src),
   '全文件不存在「UPDATE ... OUTPUT」非法顺序');
+// v1.18.79：createFile / updateFile 必须携带 category 列（分类功能双驱动红线）
+assert(/link_url, category\)\s*\n?\s*OUTPUT INSERTED\.\*/.test(src) && /@link_url, @category\)/.test(src),
+  'createFile INSERT 携带 category 列与参数');
+assert(/patch\.category != null.*category = @category/s.test(src),
+  'updateFile 支持更新 category 字段');
 
 console.log(`\nRESULT: passed=${passed} failed=${failed}`);
 process.exit(failed ? 1 : 0);
