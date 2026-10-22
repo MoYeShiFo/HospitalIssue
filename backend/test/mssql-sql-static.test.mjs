@@ -39,5 +39,14 @@ assert(/link_url, category\)\s*\n?\s*OUTPUT INSERTED\.\*/.test(src) && /@link_ur
 assert(/patch\.category != null.*category = @category/s.test(src),
   'updateFile 支持更新 category 字段');
 
+// v1.18.81：机构表 project_manager 平滑加列 + update 支持（orgs/mssqlOrgStore.js）
+const orgSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'orgs', 'mssqlOrgStore.js'), 'utf8');
+assert(/IF NOT EXISTS \(SELECT \* FROM sys\.columns WHERE object_id = OBJECT_ID\(N'dbo\.app_org'\) AND name = N'project_manager'\)/.test(orgSrc),
+  'mssqlOrgStore 启动时对 app_org 平滑加列 project_manager（IF NOT EXISTS）');
+assert(/'projectManagerId' in patch[\s\S]{0,200}sets\.push\('project_manager=@pm'\)/.test(orgSrc),
+  'mssqlOrgStore.update 支持更新 project_manager=@pm');
+assert(/project_manager: r\.project_manager == null \? null : Number\(r\.project_manager\)/.test(orgSrc),
+  'mapOrg 映射 project_manager（null 归一）');
+
 console.log(`\nRESULT: passed=${passed} failed=${failed}`);
 process.exit(failed ? 1 : 0);

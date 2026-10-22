@@ -17,12 +17,34 @@ const router = express.Router();
 // 机构管理是「跨机构」操作，仅平台管理员可用。
 router.use(authenticate, requirePlatformAdmin());
 
-// 机构列表（含成员数）
+// 机构列表（含成员数）；v1.18.81 附项目经理 id + 显示名（账号被删时显示名回落空）
 router.get('/', async (req, res) => {
   try {
     await ensureOrgs();
     const orgs = await listOrgs();
-    res.json({ current: req.orgId, orgs });
+    const users = await (await getUserStore()).list();
+    const byId = new Map(users.map((u) => [String(u.id), u]));
+    const enriched = orgs.map((o) => {
+      const pmId = o.project_manager == null ? null : Number(o.project_manager);
+      const pm = pmId != null ? byId.get(String(pmId)) : null;
+      const { project_manager, ...rest } = o;
+      return { ...rest, projectManagerId: pmId, projectManagerName: pm ? (pm.name || pm.username) : (pmId != null ? '（账号已删除）' : '') };
+    });
+    res.json({ current: req.orgId, orgs: enriched });
+  } catch (e) {
+    send500(res, e);
+  }
+});
+
+// 公司用户候选（v1.18.81）：机构「项目经理」下拉数据源。
+// 全局启用公司用户（公司用户可跨机构归属，不限于本机构成员）。
+router.get('/company-users', async (req, res) => {
+  try {
+    const users = await (await getUserStore()).list();
+    const items = users
+      .filter((u) => u.userType === 'company' && u.active !== false)
+      .map((u) => ({ id: u.id, username: u.username, name: u.name || u.username }));
+    res.json(items);
   } catch (e) {
     send500(res, e);
   }
@@ -46,14 +68,43 @@ router.post('/', async (req, res) => {
   }
 });
 
-// 修改机构（改名 / 启用停用）
+// 修改机构（改名 / 启用停用 / 项目经理）
 router.put('/:id', async (req, res) => {
   try {
+    const body = { ...(req.body || {}) };
     const before = await (await getOrgStore()).get(req.params.id);
-    const after = await updateOrg(req.params.id, req.body || {});
+    // 项目经理（v1.18.81）：body 携带 projectManagerId 才处理；null/空=清空；
+    // 非空必须是「启用的公司用户」，防止把院方账号/任意数字设为项目经理。
+    let pmAfter; let pmUser = null;
+    if ('projectManagerId' in body) {
+      const raw = body.projectManagerId;
+      if (raw == null || raw === '') {
+        body.projectManagerId = null;
+        pmAfter = null;
+      } else {
+        const uid = Number(raw);
+        if (!Number.isFinite(uid) || uid <= 0) return res.status(400).json({ error: '项目经理参数不合法' });
+        const target = await (await getUserStore()).findById(uid);
+        if (!target) return res.status(404).json({ error: '所选用户不存在' });
+        if (target.userType !== 'company') return res.status(400).json({ error: '项目经理必须是公司用户' });
+        if (target.active === false) return res.status(400).json({ error: '所选账号已停用，不能设为项目经理' });
+        body.projectManagerId = uid;
+        pmAfter = uid;
+        pmUser = target;
+      }
+    }
+    const after = await updateOrg(req.params.id, body);
     const segs = [];
     if (before && after && before.name !== after.name) segs.push(`名称：「${before.name}」→「${after.name}」`);
     if (before && after && before.active !== after.active) segs.push(`状态：${after.active ? '启用' : '停用'}`);
+    if (after && 'projectManagerId' in body) {
+      const pmBefore = before ? (before.project_manager == null ? null : Number(before.project_manager)) : null;
+      if (pmBefore !== pmAfter) {
+        const label = (u) => (u ? `${u.name || u.username}（${u.username}）` : '无');
+        const prevUser = pmBefore != null ? await (await getUserStore()).findById(pmBefore) : null;
+        segs.push(`项目经理：${label(prevUser)}→${label(pmUser)}`);
+      }
+    }
     await audit({
       username: req.user.username,
       action: 'UPDATE_ORG',

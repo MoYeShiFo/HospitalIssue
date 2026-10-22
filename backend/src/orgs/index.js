@@ -197,6 +197,8 @@ export async function updateOrg(id, patch = {}) {
   const next = {};
   if (typeof patch.name === 'string') next.name = patch.name;
   if (typeof patch.active === 'boolean') next.active = patch.active;
+  // 项目经理（v1.18.81）：透传（null=清空；身份合法性由路由层校验）
+  if ('projectManagerId' in patch) next.projectManagerId = patch.projectManagerId;
   // 守卫：不允许停用/删除最后一个「启用中」的机构，否则全系统无处可去。
   if (patch.active === false) {
     const orgs = await s.list();
