@@ -4,8 +4,10 @@ import { DEFAULT_ORG_ID } from '../db/orgScope.js';
 
 // 生产用：SQL Server 文件管理（dbo.app_file，v1.18.70）。
 // 可见性 WHERE 与 files/visibility.js 的 canSeeFile 逐条等价（改一处必须同步另一处）：
-//   平台管理员 → 全可见；all_orgs → 任何登录用户可见；
-//   org / org_company → 仅本机构；org_company 还要求公司用户类型（平台管理员豁免该类型要求）。
+//   all_orgs → 任何登录用户可见（跨机构）；
+//   org / org_company → 仅当前机构（@org）；org_company 还要求公司用户类型（平台管理员豁免）。
+//   v1.18.72 起与 problems 等模块口径统一：切换机构后按当前机构过滤，平台管理员也不例外
+//   （旧版 @platform = 1 全量放行，导致平台管理员切机构后仍见他机构文件）。
 export function createMssqlFileStore(cfg) {
   let pool;
   async function getPool() {
@@ -54,15 +56,15 @@ export function createMssqlFileStore(cfg) {
   });
 
   // 可见性 WHERE：每个 @ 参数在同一请求上只注册一次（mssql-params 静态检查约束）。
-  // org 缺省落默认机构（与 bindOrg 系列一致）；platform/utype 由调用方按 req.user 注入。
+  // org 缺省落默认机构（与 bindOrg 系列一致）；utype 由调用方按 req.user 注入；
+  // platform 仅用于豁免 org_company 档的用户类型要求（不再作为全量放行开关，v1.18.72）。
   function visWhere(rq, { orgId, platform, userType } = {}) {
     rq.input('org', sql.BigInt, orgId == null ? DEFAULT_ORG_ID : Number(orgId));
     rq.input('platform', sql.Bit, platform ? 1 : 0);
     rq.input('utype', sql.NVarChar(16), userType === 'company' ? 'company' : 'hospital');
-    return `WHERE (@platform = 1
-        OR visibility = N'all_orgs'
+    return `WHERE (visibility = N'all_orgs'
         OR (org_id = @org AND (visibility = N'org'
-            OR (visibility = N'org_company' AND (@platform = 1 OR @utype = N'company')))))`;
+            OR (visibility = N'org_company' AND (@utype = N'company' OR @platform = 1)))))`;
   }
 
   // 搜索词 WHERE（可选）：与 dev 侧检索字段一致（original_name / remark / uploader_name）。

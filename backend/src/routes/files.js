@@ -41,10 +41,17 @@ function previewTypeOf(originalName, mime) {
   return null;
 }
 
-// 取「本机构内」的文件记录；跨机构/不存在一律 404（多机构红线）
+// 取文件记录（读路径用）：先按当前机构查；查不到且为 all_orgs 档（显式跨机构共享）时
+// 按 id 裸查放行——该档在任何机构的列表可见，按 id 的读/预览/下载必须与列表一致
+// （v1.18.72：修正「列表可见但预览/下载 404」）。org / org_company 档跨机构仍一律
+// 404（多机构红线，不暴露存在性）。删除路径不用本函数（见 DELETE 路由内的跨机构守卫）。
 async function loadFileInOrg(id, orgId) {
   const store = await getFileStore();
-  const rec = await store.getFileById(id, orgId);
+  let rec = await store.getFileById(id, orgId);
+  if (!rec) {
+    const any = await store.getFileById(id, null);
+    if (any && any.visibility === 'all_orgs') rec = any;
+  }
   if (!rec) return null;
   return { store, rec };
 }
@@ -168,16 +175,20 @@ router.get('/:id/preview', authenticate, async (req, res) => {
 });
 
 // 删除：上传者本人可删自己的文件；删除他人文件需「删除文件」权限。
-// 物理删磁盘 + 登记记录，写审计日志。
+// 跨机构（仅可能为 all_orgs 档）仅放行上传者本人——全机构共享文件归上传者所有；
+// 非本人的跨机构删除一律 404（多机构红线，不暴露存在性）。物理删磁盘 + 登记记录，写审计日志。
 router.delete('/:id', authenticate, async (req, res) => {
   try {
     const found = await loadFileInOrg(req.params.id, req.orgId);
     if (!found) return res.status(404).json({ error: '文件不存在或已被删除' });
     const isOwner = found.rec.uploaded_by === req.user.username;
+    if (Number(found.rec.org_id) !== Number(req.orgId) && !isOwner) {
+      return res.status(404).json({ error: '文件不存在或已被删除' });
+    }
     if (!isOwner && !(await hasFileDeletePermission(req))) {
       return res.status(403).json({ error: '没有执行此操作的权限' });
     }
-    const removed = await found.store.deleteFile(req.params.id, req.orgId);
+    const removed = await found.store.deleteFile(req.params.id, found.rec.org_id);
     if (!removed) return res.status(404).json({ error: '文件不存在或已被删除' });
     try {
       await removeStoredFiles([{ storedName: removed.stored_name }]);

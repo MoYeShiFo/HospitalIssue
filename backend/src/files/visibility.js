@@ -17,18 +17,21 @@ export const VISIBILITY_LABELS = {
   org_company: '公司用户',
 };
 
-// 单条文件对「当前用户」是否可见：
-// - 平台管理员：三档全可见（含公司用户档，不要求本人是公司用户）；
-// - all_orgs：任何登录用户可见（跨机构）；
-// - org / org_company：仅上传者所属机构（orgId）内可见；org_company 还要求用户类型为公司用户。
+// 单条文件对「当前用户」是否可见（v1.18.72 修正：与 problems 等模块口径统一——
+// 切换机构后一律按「当前机构」过滤，平台管理员也不例外；唯一跨机构可见的通道是
+// 显式选择「全机构共享」档。旧版曾对 platformAdmin 直接放行，导致平台管理员切到
+// 其他机构仍看到他机构上传的 org/org_company 文件，且列表可见但按 id 预览/下载
+// 会 404（by-id 路由本就按 orgId 作用域），自相矛盾）：
+// - all_orgs：任何登录用户可见（跨机构，该档的设计用途）；
+// - org / org_company：仅当前机构（orgId）内可见；org_company 还要求公司用户类型
+//   （平台管理员豁免类型要求——其管理当前机构，档内数据应完整可见）。
 // orgId 为 null 时不做机构匹配（保持与 db/orgScope.js 一致的缺省语义）。
 export function canSeeFile(file, user, orgId) {
   if (!file || !user) return false;
-  if (user.platformAdmin) return true;
   if (file.visibility === VISIBILITY.ALL_ORGS) return true;
   if (orgId != null && Number(file.org_id) !== Number(orgId)) return false;
   if (file.visibility === VISIBILITY.ORG) return true;
-  if (file.visibility === VISIBILITY.ORG_COMPANY) return user.userType === 'company';
+  if (file.visibility === VISIBILITY.ORG_COMPANY) return user.userType === 'company' || user.platformAdmin === true;
   return false;
 }
 
