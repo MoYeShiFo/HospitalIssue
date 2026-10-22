@@ -15,7 +15,11 @@ export const config = {
   adminUsername: process.env.ADMIN_USER || 'admin',
   adminName: process.env.ADMIN_NAME || '系统管理员',
   adminPassword: process.env.ADMIN_PASSWORD || 'admin123',
-  uploadsDir: process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads'),
+  // v1.18.75：强制解析为绝对路径 —— express res.sendFile/res.download 要求绝对路径，
+  // 相对值（如 UPLOADS_DIR=uploads）会让 fs.stat/multer 按 CWD 成功而 sendFile 抛
+  // 「path must be absolute or specify root」。按 CWD 解析保持与既有磁盘文件位置一致，
+  // 服务器 .env 无需任何改动；绝对值原样保留，未配置时仍默认 backend/uploads。
+  uploadsDir: path.resolve(process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads')),
   auditDevPath: process.env.AUDIT_DEV_PATH || path.join(__dirname, '..', 'data', 'audit.json'),
   settingsDevPath: process.env.SETTINGS_DEV_PATH || path.join(__dirname, '..', 'data', 'settings.json'),
   notificationsDevPath: process.env.NOTIFICATIONS_DEV_PATH || path.join(__dirname, '..', 'data', 'notifications.json'),
