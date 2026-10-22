@@ -435,7 +435,11 @@ export const api = {
   // 预览二进制（带鉴权头 → blob → objectURL）；仅白名单类型可预览，其余走后端 302 转下载
   fetchFileBlob: async (id) => {
     const res = await authFetch(`/files/${id}/preview`);
-    if (!res.ok) throw new Error('预览加载失败');
+    if (!res.ok) {
+      let msg = '预览加载失败';
+      try { const j = await res.json(); if (j && j.error) msg = j.error; } catch { /* 非 JSON 错误体 */ }
+      throw new Error(msg);
+    }
     return res.blob();
   },
 

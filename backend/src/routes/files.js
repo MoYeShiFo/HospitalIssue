@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'node:path';
+import fs from 'node:fs/promises';
 import { getFileStore } from '../files/index.js';
 import { authenticate } from '../auth/middleware.js';
 import { requirePermission, isPlatformAdmin } from '../auth/authorize.js';
@@ -166,7 +167,18 @@ router.get('/:id/download', authenticate, async (req, res) => {
     }
     const stored = path.basename(String(found.rec.stored_name || ''));
     if (!stored) return res.status(404).json({ error: '文件不存在或您无权查看' });
-    res.download(path.join(config.uploadsDir, stored), repairMojibakeName(found.rec.original_name));
+    const full = path.join(config.uploadsDir, stored);
+    // 磁盘文件可能已丢失：先校验，缺失给出明确提示而非 500 文案
+    try {
+      await fs.stat(full);
+    } catch {
+      return res.status(404).json({ error: '文件记录存在，但磁盘文件已丢失（可能已被清理或迁移），请联系管理员或将此文件重新上传' });
+    }
+    res.download(full, repairMojibakeName(found.rec.original_name), (err) => {
+      if (err && !res.headersSent) {
+        res.status(404).json({ error: '文件发送失败，磁盘文件可能已丢失，请联系管理员' });
+      }
+    });
   } catch (e) {
     send500(res, e);
   }
@@ -187,10 +199,20 @@ router.get('/:id/preview', authenticate, async (req, res) => {
     const stored = path.basename(String(found.rec.stored_name || ''));
     if (!stored) return res.status(404).json({ error: '文件不存在或您无权查看' });
     const full = path.join(config.uploadsDir, stored);
+    // 磁盘文件可能已丢失（记录存在但实体被清理/迁移）：先校验，缺失给出明确提示而非 500 文案
+    try {
+      await fs.stat(full);
+    } catch {
+      return res.status(404).json({ error: '文件记录存在，但磁盘文件已丢失（可能已被清理或迁移），请联系管理员或将此文件重新上传' });
+    }
     res.setHeader('Content-Type', type.startsWith('text/') ? `${type}; charset=utf-8` : type);
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(found.rec.original_name)}`);
-    res.sendFile(full);
+    res.sendFile(full, (err) => {
+      if (err && !res.headersSent) {
+        res.status(404).json({ error: '文件发送失败，磁盘文件可能已丢失，请联系管理员' });
+      }
+    });
   } catch (e) {
     send500(res, e);
   }

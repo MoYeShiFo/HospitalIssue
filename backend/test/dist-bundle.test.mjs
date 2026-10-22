@@ -210,13 +210,13 @@ try {
     'JS 产物含 file.upload / file.delete 权限 key（前后端逐字一致红线）');
   assert(cssText.includes('.fm-badge'), 'CSS 产物含三档徽标样式 .fm-badge（v1.18.70）');
   // v1.18.71：白名单外类型预览按钮置灰提示（修 .xlsx 等类型出现「两个下载」按钮）
-  assert(jsText.includes('该类型需下载后查看'), 'JS 产物含预览置灰提示「该类型需下载后查看」（v1.18.71）');
+  assert(jsText.includes('请下载后查看'), 'JS 产物含预览置灰提示「该类型不支持在线预览，请下载后查看」（v1.18.71）');
   const fmTabCountRule = (cssText.match(/\.fm-tab-count(?:\[[^\]]*\])?\{[^}]*\}/) || [''])[0];
   assert(!!fmTabCountRule, 'CSS 产物含 .fm-tab-count 规则本体（分类计数徽标，scoped 后缀容错）');
   // v1.18.73：全类型预览（Office / 音视频 / 更多文本）渲染容器类名与版本号必须真的编进产物
   assert(jsText.includes('fm-xls') && jsText.includes('fm-docx-wrap') && jsText.includes('fm-media'),
     'JS 产物含全类型预览渲染容器类名（fm-xls / fm-docx-wrap / fm-media，v1.18.73）');
-  assert(jsText.includes('v1.18.73'), 'JS 产物含版本号 v1.18.73（来自 src/version.js，v1.18.73）');
+  assert(jsText.includes('v1.18.74'), 'JS 产物含版本号 v1.18.74（来自 src/version.js，v1.18.73 起全类型预览 + v1.18.74 磁盘丢失优雅降级）');
   // v1.18.28: 数据驾驶舱「平均处理时长」改按工作日 8 小时折算 —— 口径提示文案必须真的编进产物
   assert(jsText.includes('按工作日 8 小时折算'), 'JS 产物含平均处理时长「按工作日 8 小时折算」口径提示');
   // v1.18.29：聊天「新建会话」选成员列表按类型分二级 sheet 页 —— 「院方用户/公司用户」标签与
