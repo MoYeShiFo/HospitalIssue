@@ -182,7 +182,9 @@ export function createMssqlFileStore(cfg) {
       if (patch.original_name != null) { req.input('original_name', sql.NVarChar(255), patch.original_name); sets.push('original_name = @original_name'); }
       if (patch.link_url != null) { req.input('link_url', sql.NVarChar(1000), patch.link_url); sets.push('link_url = @link_url'); }
       if (!sets.length) return this.getFileById(num, orgId);
-      const res = await req.query(`UPDATE dbo.app_file OUTPUT INSERTED.* SET ${sets.join(', ')} WHERE ${where}`);
+      // 注意：UPDATE 的 OUTPUT 子句必须位于 SET 之后（DELETE/INSERT 可前置，UPDATE 前置会报
+      // 「Incorrect syntax near 'OUTPUT'」——v1.18.77 首版即踩此坑，v1.18.78 修正）
+      const res = await req.query(`UPDATE dbo.app_file SET ${sets.join(', ')} OUTPUT INSERTED.* WHERE ${where}`);
       return res.recordset.length ? map(res.recordset[0]) : null;
     },
 
