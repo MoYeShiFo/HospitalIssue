@@ -86,6 +86,14 @@ const upVisibility = ref('org');
 const upRemark = ref('');
 const upSubmitting = ref(false);
 
+// 添加在线文档链接弹窗（v1.18.76）
+const showLink = ref(false);
+const linkName = ref('');
+const linkUrl = ref('');
+const linkVisibility = ref('org');
+const linkRemark = ref('');
+const linkSubmitting = ref(false);
+
 // 预览弹窗
 const preview = ref(null); // { name, kind, url, text, html } —— kind ∈ image|pdf|text|excel|word|ppt|video|audio
 const wordBox = ref(null); // docx-preview 渲染容器（kind==='word' 时挂载）
@@ -195,6 +203,34 @@ async function doUpload() {
   }
 }
 
+// ── 添加在线文档链接（v1.18.76）──
+function openAddLink() {
+  linkName.value = '';
+  linkUrl.value = '';
+  linkVisibility.value = 'org';
+  linkRemark.value = '';
+  showLink.value = true;
+}
+async function doAddLink() {
+  if (!linkName.value.trim()) { showToast('请填写链接名称', 'error'); return; }
+  if (!/^https?:\/\/\S+$/i.test(linkUrl.value.trim())) { showToast('链接需以 http:// 或 https:// 开头', 'error'); return; }
+  linkSubmitting.value = true;
+  try {
+    await api.addFileLink(linkName.value.trim(), linkUrl.value.trim(), linkVisibility.value, linkRemark.value.trim());
+    showLink.value = false;
+    showToast('链接已添加');
+    page.value = 1;
+    load();
+  } catch (e) {
+    showToast(e.message || '添加链接失败', 'error');
+  } finally {
+    linkSubmitting.value = false;
+  }
+}
+function openLinkRow(r) {
+  window.open(r.link_url, '_blank', 'noopener');
+}
+
 // ── 预览 / 下载 ──
 // 按扩展名分派渲染器（v1.18.73）：浏览器原生能力（image/pdf/video/audio）→ objectURL；
 // 文本/HTML 源码 → blob.text() 经 <pre> 展示（Vue 插值自动转义，不执行）；
@@ -287,9 +323,12 @@ onBeforeUnmount(() => {
     <header class="page-head">
       <div>
         <h1>文件管理</h1>
-        <p class="sub">共 <b>{{ total }}</b> 个文件 · 按可见范围分类共享，上传时可选择权限档位</p>
+        <p class="sub">共 <b>{{ total }}</b> 项 · 按可见范围分类共享，可上传文件或添加在线文档链接</p>
       </div>
-      <button v-if="canUpload" class="btn primary" @click="openUpload">上传文件</button>
+      <div class="fm-head-btns">
+        <button v-if="canUpload" class="btn" @click="openAddLink">添加链接</button>
+        <button v-if="canUpload" class="btn primary" @click="openUpload">上传文件</button>
+      </div>
     </header>
 
     <div class="fm-tools">
@@ -331,20 +370,28 @@ onBeforeUnmount(() => {
         </thead>
         <tbody>
           <tr v-for="r in rows" :key="r.id">
-            <td class="fm-name" :title="r.original_name">{{ r.original_name }}</td>
+            <td class="fm-name" :title="r.link_url ? r.link_url : r.original_name">
+              <template v-if="r.link_url"><span class="fm-link-name">🔗 {{ r.original_name }}</span></template>
+              <template v-else>{{ r.original_name }}</template>
+            </td>
             <td><span class="fm-badge" :class="'fm-badge-' + r.visibility">{{ VIS_LABEL[r.visibility] || r.visibility }}</span></td>
-            <td class="fm-muted">{{ fmtSize(r.size) }}</td>
+            <td class="fm-muted">{{ r.link_url ? '—' : fmtSize(r.size) }}</td>
             <td class="fm-muted">{{ r.uploader_name || r.uploaded_by }}</td>
             <td class="fm-muted">{{ fmtTime(r.created_at) }}</td>
             <td class="fm-muted fm-remark" :title="r.remark">{{ r.remark || '—' }}</td>
             <td class="col-ops">
-              <button
-                class="small"
-                :disabled="!canPreview(r.original_name)"
-                :title="canPreview(r.original_name) ? '' : '该类型不支持在线预览，请下载后查看'"
-                @click="openPreview(r)"
-              >预览</button>
-              <button class="small" @click="download(r)">下载</button>
+              <template v-if="r.link_url">
+                <button class="small" @click="openLinkRow(r)">打开</button>
+              </template>
+              <template v-else>
+                <button
+                  class="small"
+                  :disabled="!canPreview(r.original_name)"
+                  :title="canPreview(r.original_name) ? '' : '该类型不支持在线预览，请下载后查看'"
+                  @click="openPreview(r)"
+                >预览</button>
+                <button class="small" @click="download(r)">下载</button>
+              </template>
               <button v-if="canDeleteRow(r)" class="small danger" @click="askDelete(r)">删除</button>
             </td>
           </tr>
@@ -401,6 +448,50 @@ onBeforeUnmount(() => {
           <button class="small" @click="showUpload = false">取消</button>
           <button class="small primary" :disabled="upSubmitting || !upFile" @click="doUpload">
             {{ upSubmitting ? '上传中…' : '开始上传' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 添加在线文档链接弹窗（v1.18.76） -->
+    <div v-if="showLink" class="modal-mask" @click.self="showLink = false">
+      <div class="modal fm-modal" role="dialog" aria-modal="true" aria-label="添加在线文档链接">
+        <div class="fm-modal-head">
+          <h3>添加在线文档链接</h3>
+          <button class="icon-btn" aria-label="关闭" @click="showLink = false">✕</button>
+        </div>
+        <label class="fm-field">
+          <span class="fm-label">链接名称（列表内显示）</span>
+          <input v-model="linkName" type="text" maxlength="255" placeholder="例如：2026 年第三季度运维通报（腾讯文档）" />
+        </label>
+        <label class="fm-field">
+          <span class="fm-label">链接地址（http:// 或 https:// 开头）</span>
+          <input v-model="linkUrl" type="url" maxlength="1000" placeholder="https://docs.qq.com/..." />
+        </label>
+        <fieldset class="fm-field fm-tiers">
+          <legend class="fm-label">可见范围（谁能查看、打开）</legend>
+          <label v-for="t in UPLOAD_TIERS" :key="t.key" class="fm-tier" :class="{ disabled: t.key === 'all_orgs' && !canPlatformAdmin }">
+            <input
+              type="radio"
+              name="fm-link-visibility"
+              :value="t.key"
+              :disabled="t.key === 'all_orgs' && !canPlatformAdmin"
+              v-model="linkVisibility"
+            />
+            <span class="fm-tier-text">
+              <b>{{ t.label }}</b>
+              <em>{{ t.desc }}</em>
+            </span>
+          </label>
+        </fieldset>
+        <label class="fm-field">
+          <span class="fm-label">备注（选填，便于他人检索）</span>
+          <input v-model="linkRemark" type="text" maxlength="500" placeholder="例如：请各科室填写后提交" />
+        </label>
+        <div class="fm-modal-foot">
+          <button class="small" @click="showLink = false">取消</button>
+          <button class="small primary" :disabled="linkSubmitting || !linkName.trim() || !linkUrl.trim()" @click="doAddLink">
+            {{ linkSubmitting ? '添加中…' : '添加链接' }}
           </button>
         </div>
       </div>
@@ -484,6 +575,10 @@ onBeforeUnmount(() => {
 .fm-error { margin: 0; color: #b91c1c; font-size: 13px; }
 
 .fm-name { word-break: break-all; max-width: 320px; }
+/* 在线文档链接行（v1.18.76） */
+.fm-head-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.fm-link-name { color: var(--primary); cursor: pointer; }
+.fm-tr:hover .fm-link-name { text-decoration: underline; }
 .fm-muted { color: var(--muted); font-size: 12.5px; }
 .fm-remark { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

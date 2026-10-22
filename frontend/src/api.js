@@ -443,6 +443,21 @@ export const api = {
     return res.blob();
   },
 
+  // 添加在线文档链接（v1.18.76）：仅登记 URL，不落磁盘实体；与上传同权限模型
+  addFileLink: async (name, url, visibility, remark) => {
+    const res = await authFetch('/files/link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, url, visibility, remark }),
+    });
+    if (!res.ok) {
+      let msg = '添加链接失败';
+      try { const j = await res.json(); if (j && j.error) msg = j.error; } catch { /* 非 JSON 错误体 */ }
+      throw new Error(msg);
+    }
+    return res.json();
+  },
+
   // 消息通知
   listNotifications: (params = {}) => req('/notifications' + qs(params)),
   notificationsUnreadCount: () => req('/notifications/unread-count'),

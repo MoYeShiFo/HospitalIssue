@@ -40,6 +40,7 @@ export function createDevFileStore(filePath) {
       remark: rec.remark || '',
       uploaded_by: rec.uploaded_by || '',
       uploader_name: rec.uploader_name || '',
+      link_url: rec.link_url || '',
       created_at: rec.created_at || new Date().toISOString(),
     };
   }

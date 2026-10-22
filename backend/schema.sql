@@ -265,10 +265,16 @@ BEGIN
         remark        NVARCHAR(500) NOT NULL DEFAULT N'',
         uploaded_by   NVARCHAR(100) NOT NULL,
         uploader_name NVARCHAR(100) NOT NULL DEFAULT N'',
+        link_url      NVARCHAR(1000) NOT NULL DEFAULT N'',
         created_at    DATETIME NOT NULL DEFAULT GETDATE()
     );
     CREATE INDEX ix_app_file_scope ON dbo.app_file (org_id, visibility, created_at);
 END
+GO
+
+-- v1.18.76：在线文档链接列（存量库平滑加列；新建库由上方 CREATE TABLE 直接携带）
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.app_file') AND name = N'link_url')
+    ALTER TABLE dbo.app_file ADD link_url NVARCHAR(1000) NOT NULL DEFAULT N'';
 GO
 
 -- 9.4) 用户表增量列：平台管理员标记（仅老库需要）

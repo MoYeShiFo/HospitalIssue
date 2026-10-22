@@ -37,6 +37,9 @@ export function createMssqlFileStore(cfg) {
         );
         CREATE INDEX ix_app_file_scope ON dbo.app_file (org_id, visibility, created_at);
       END
+      -- v1.18.76：在线文档链接（存量库平滑加列）
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.app_file') AND name = N'link_url')
+        ALTER TABLE dbo.app_file ADD link_url NVARCHAR(1000) NOT NULL DEFAULT N'';
     `);
   }
 
@@ -52,6 +55,7 @@ export function createMssqlFileStore(cfg) {
     remark: r.remark || '',
     uploaded_by: r.uploaded_by || '',
     uploader_name: r.uploader_name || '',
+    link_url: r.link_url || '',
     created_at: r.created_at ? new Date(r.created_at).toISOString() : null,
   });
 
@@ -141,11 +145,12 @@ export function createMssqlFileStore(cfg) {
       req.input('remark', sql.NVarChar(500), rec.remark || '');
       req.input('uploaded_by', sql.NVarChar(100), rec.uploaded_by || '');
       req.input('uploader_name', sql.NVarChar(100), rec.uploader_name || '');
+      req.input('link_url', sql.NVarChar(1000), rec.link_url || '');
       const res = await req.query(`
         INSERT INTO dbo.app_file
-          (org_id, visibility, original_name, stored_name, size, mime, remark, uploaded_by, uploader_name)
+          (org_id, visibility, original_name, stored_name, size, mime, remark, uploaded_by, uploader_name, link_url)
         OUTPUT INSERTED.*
-        VALUES (@org, @visibility, @original_name, @stored_name, @size, @mime, @remark, @uploaded_by, @uploader_name)
+        VALUES (@org, @visibility, @original_name, @stored_name, @size, @mime, @remark, @uploaded_by, @uploader_name, @link_url)
       `);
       return map(res.recordset[0]);
     },
