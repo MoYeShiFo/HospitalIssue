@@ -296,6 +296,8 @@ export const api = {
 
   // 机构管理（仅平台管理员可见 / 可用）
   listOrgs: () => req('/orgs'),
+  // 公司用户候选（v1.18.81）：机构「项目经理」下拉数据源
+  listCompanyUsers: () => req('/orgs/company-users'),
   createOrg: (data) => req('/orgs', { method: 'POST', body: JSON.stringify(data) }),
   updateOrg: (id, data) => req('/orgs/' + id, { method: 'PUT', body: JSON.stringify(data) }),
   removeOrg: (id) => req('/orgs/' + id, { method: 'DELETE' }),

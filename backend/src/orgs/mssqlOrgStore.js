@@ -31,6 +31,13 @@ export function createMssqlOrgStore(cfg) {
         );
       END
     `);
+    // 项目经理（v1.18.81）：老库平滑加列（公司用户 user_id，可空）
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.app_org') AND name = N'project_manager')
+      BEGIN
+        ALTER TABLE dbo.app_org ADD project_manager BIGINT NULL;
+      END
+    `);
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = N'app_user_org')
       BEGIN
@@ -51,6 +58,8 @@ export function createMssqlOrgStore(cfg) {
     code: r.code,
     name: r.name,
     active: r.active !== false && r.active !== 0,
+    // 项目经理（v1.18.81）：公司用户 user_id，可空
+    project_manager: r.project_manager == null ? null : Number(r.project_manager),
     created_at: r.created_at ? new Date(r.created_at).toISOString() : null,
   } : null);
 
@@ -107,6 +116,11 @@ export function createMssqlOrgStore(cfg) {
       if (typeof patch.active === 'boolean') {
         sets.push('active=@active');
         req.input('active', sql.Bit, patch.active ? 1 : 0);
+      }
+      // 项目经理（v1.18.81）：null=未设置；身份合法性由路由层校验
+      if ('projectManagerId' in patch) {
+        sets.push('project_manager=@pm');
+        req.input('pm', sql.BigInt, patch.projectManagerId == null ? null : Number(patch.projectManagerId));
       }
       if (!sets.length) return getById(id);
       const res = await req.query(`UPDATE dbo.app_org SET ${sets.join(', ')} OUTPUT INSERTED.* WHERE id=@id`);

@@ -34,6 +34,8 @@ export function createDevOrgStore(filePath) {
     code: o.code,
     name: o.name,
     active: o.active !== false,
+    // 项目经理（v1.18.81）：公司用户的 user_id，可空（未设置）
+    project_manager: o.project_manager == null ? null : Number(o.project_manager),
     created_at: o.created_at || null,
   });
   const mapMember = (m) => ({ user_id: m.user_id, org_id: m.org_id, role: m.role || 'reporter' });
@@ -74,6 +76,10 @@ export function createDevOrgStore(filePath) {
       if (!o) return null;
       if (typeof patch.name === 'string' && patch.name.trim()) o.name = patch.name.trim().slice(0, 60);
       if (typeof patch.active === 'boolean') o.active = patch.active;
+      // 项目经理（v1.18.81）：null=未设置；非空=公司用户 user_id（身份合法性由路由层校验）
+      if ('projectManagerId' in patch) {
+        o.project_manager = patch.projectManagerId == null ? null : Number(patch.projectManagerId);
+      }
       await save();
       return mapOrg(o);
     },

@@ -31,6 +31,42 @@ const memSaving = ref(false);
 const addUserId = ref('');
 const addRole = ref('');
 
+// 项目经理维护弹框（v1.18.81）：从公司用户中选择，可清空
+const pmOpen = ref(false);
+const pmOrg = ref(null);
+const pmCandidates = ref([]);
+const pmValue = ref('');
+const pmErr = ref('');
+const pmSaving = ref(false);
+async function openPm(o) {
+  pmOrg.value = { id: o.id, name: o.name };
+  pmValue.value = o.projectManagerId != null ? String(o.projectManagerId) : '';
+  pmErr.value = '';
+  pmCandidates.value = [];
+  pmOpen.value = true;
+  try {
+    const list = await api.listCompanyUsers();
+    pmCandidates.value = Array.isArray(list) ? list : [];
+  } catch (e) {
+    pmErr.value = e.message || '加载公司用户失败';
+  }
+}
+async function savePm() {
+  pmErr.value = '';
+  if (!pmOrg.value) return;
+  pmSaving.value = true;
+  try {
+    await api.updateOrg(pmOrg.value.id, { projectManagerId: pmValue.value ? Number(pmValue.value) : null });
+    pmOpen.value = false;
+    await load();
+  } catch (e) {
+    pmErr.value = e.message || '保存失败';
+  } finally {
+    pmSaving.value = false;
+  }
+}
+const pmLabel = (c) => `${c.name}${c.username && c.username !== c.name ? '（' + c.username + '）' : ''}`;
+
 function isCurrent(o) {
   return props.currentOrgId != null && String(props.currentOrgId) === String(o.id);
 }
@@ -245,6 +281,7 @@ onMounted(load);
               <th class="col-id">ID</th>
               <th>机构名称</th>
               <th>标识</th>
+              <th>项目经理</th>
               <th>成员数</th>
               <th>状态</th>
               <th class="col-ops">操作</th>
@@ -258,19 +295,24 @@ onMounted(load);
                 <span v-if="isCurrent(o)" class="tag tag-cur">当前</span>
               </td>
               <td><code>{{ o.code }}</code></td>
+              <td>
+                <span v-if="o.projectManagerName" class="pm-name">{{ o.projectManagerName }}</span>
+                <span v-else class="pm-none">未设置</span>
+              </td>
               <td>{{ o.memberCount ?? 0 }}</td>
               <td>
                 <span class="st" :class="o.active ? 'st-已解决' : 'st-已关闭'">{{ o.active ? '启用' : '已停用' }}</span>
               </td>
               <td class="col-ops">
                 <button class="small" @click="openMembers(o)">成员管理</button>
+                <button class="small" @click="openPm(o)">项目经理</button>
                 <button class="small" @click="openEdit(o)">改名</button>
                 <button class="small" :class="o.active ? 'danger' : 'primary'" @click="toggleActive(o)">{{ o.active ? '停用' : '启用' }}</button>
                 <button class="small danger" @click="remove(o)">删除</button>
               </td>
             </tr>
-            <tr v-if="!loading && orgs.length === 0"><td colspan="6" class="empty">暂无机构</td></tr>
-            <tr v-else-if="loading && orgs.length === 0"><td colspan="6" class="empty">加载中…</td></tr>
+            <tr v-if="!loading && orgs.length === 0"><td colspan="7" class="empty">暂无机构</td></tr>
+            <tr v-else-if="loading && orgs.length === 0"><td colspan="7" class="empty">加载中…</td></tr>
           </tbody>
         </table>
       </div>
@@ -290,6 +332,25 @@ onMounted(load);
         <div class="modal-actions">
           <button class="primary" :disabled="editSaving" @click="saveOrg">{{ editSaving ? '保存中…' : '保存' }}</button>
           <button :disabled="editSaving" @click="closeEdit">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 项目经理维护弹框（v1.18.81） ===== -->
+    <div v-if="pmOpen" class="modal-mask">
+      <div class="modal narrow">
+        <h3>项目经理 · {{ pmOrg?.name }}</h3>
+        <p class="hint">项目经理从<b>公司用户</b>中选择（可在「用户管理」维护，公司用户可归属多家机构）；选择「未设置」可清空。</p>
+        <label class="full">项目经理
+          <select v-model="pmValue" :disabled="pmSaving" class="pm-select">
+            <option value="">未设置</option>
+            <option v-for="c in pmCandidates" :key="c.id" :value="String(c.id)">{{ pmLabel(c) }}</option>
+          </select>
+        </label>
+        <p v-if="pmErr" class="err">{{ pmErr }}</p>
+        <div class="modal-actions">
+          <button class="primary" :disabled="pmSaving" @click="savePm">{{ pmSaving ? '保存中…' : '保存' }}</button>
+          <button :disabled="pmSaving" @click="pmOpen = false">取消</button>
         </div>
       </div>
     </div>
@@ -360,6 +421,10 @@ onMounted(load);
 
 <style scoped>
 .tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; margin-left: 6px; }
+.pm-name { font-size: 13px; }
+.pm-none { color: var(--muted); font-size: 12.5px; }
+.pm-select { width: 100%; padding: 8px 11px; border: 1px solid var(--border-strong); border-radius: 9px; background: #fbfcfe; font-size: 13px; color: var(--text); }
+.pm-select:focus { outline: none; border-color: var(--primary); background: #fff; box-shadow: 0 0 0 3px rgba(37, 99, 235, .13); }
 .tag-cur { background: #eff6ff; color: #1d4ed8; }
 .tag-pa { background: #fef3c7; color: #b45309; }
 .hint-foot { margin: 14px 0 0; }
